@@ -8,6 +8,16 @@ const myAction = new Action('com.rivermarks.pixel.action');
  */
 $SD.onConnected(({ actionInfo, appInfo, connection, messageType, port, uuid }) => {
 	console.log('Stream Deck connected!');
+	console.log('Attempting to get hue');
+
+	fetch('https://discovery.meethue.com')
+		.then(res => res.json())
+		.then(devices => {
+			if (devices.length === 1) {
+				console.log('Found one device, connecting');
+				console.log(devices[0]);
+			}
+		})
 });
 
 myAction.onKeyUp(({ action, context, device, event, payload }) => {
