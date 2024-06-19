@@ -2,7 +2,7 @@
   "Description": "Nimm diese Vorlage für dein erstes Plugin", 
   "Name": "Stream Deck Template", 
   "Category": "Templates", 
-  "com.erivermarks.pixel.action": {
+  "com.rivermarks.pixel.action": {
     "Name": "Action", 
     "Tooltip": "Dies ist die einzige 'Action' in diesem Template"
   },
