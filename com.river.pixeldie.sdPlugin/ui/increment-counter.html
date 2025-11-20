@@ -1,0 +1,372 @@
+<!DOCTYPE html>
+<html>
+<head lang="en">
+    <title>Bluetooth LE Controller</title>
+    <meta charset="utf-8" />
+    <script src="./libs/sdpi-components.js"></script>
+    <style>
+        .device-list {
+            max-height: 150px;
+            overflow-y: auto;
+            border: 1px solid #2D2D2D;
+            border-radius: 4px;
+            margin: 5px 0;
+        }
+        .device-item {
+            padding: 8px;
+            cursor: pointer;
+            border-bottom: 1px solid #2D2D2D;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .device-item:hover {
+            background-color: #3A3A3A;
+        }
+        .device-item.selected {
+            background-color: #0091FF;
+            color: white;
+        }
+        .device-info {
+            flex: 1;
+        }
+        .device-name {
+            font-weight: bold;
+        }
+        .device-address {
+            font-size: 0.9em;
+            opacity: 0.7;
+        }
+        .device-rssi {
+            font-size: 0.9em;
+        }
+        .scan-status {
+            text-align: center;
+            padding: 10px;
+            font-style: italic;
+        }
+        .service-select, .characteristic-select {
+            margin: 5px 0;
+        }
+        .command-format-tabs {
+            display: flex;
+            gap: 5px;
+            margin: 10px 0;
+        }
+        .format-tab {
+            flex: 1;
+            padding: 8px;
+            text-align: center;
+            cursor: pointer;
+            background-color: #2D2D2D;
+            border-radius: 4px;
+        }
+        .format-tab.active {
+            background-color: #0091FF;
+            color: white;
+        }
+        .command-input-container {
+            margin: 10px 0;
+        }
+        .help-text {
+            font-size: 0.85em;
+            opacity: 0.7;
+            margin-top: 5px;
+        }
+        .test-button {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <!-- Device Selection Section -->
+    <sdpi-item label="Device Selection">
+        <button class="sdpi-item-value" id="scanButton">Connect to all Pixel Dice</button>
+    </sdpi-item>
+
+    <div id="deviceListContainer" style="display: none;">
+        <sdpi-item label="Available Devices">
+            <div id="deviceList" class="device-list">
+                <div class="scan-status">Connecting...</div>
+            </div>
+        </sdpi-item>
+    </div>
+
+    <!-- Selected Device Info -->
+    <div id="selectedDeviceInfo" style="display: none;">
+        <sdpi-item label="Selected Device">
+            <div class="sdpi-item-value">
+                <div id="selectedDeviceName" style="font-weight: bold;"></div>
+                <div id="selectedDeviceAddress" style="font-size: 0.9em; opacity: 0.7;"></div>
+            </div>
+        </sdpi-item>
+    </div>
+
+    <script>
+        const { streamDeckClient } = window.SDPIComponents || {};
+        let currentSettings = {};
+        let discoveredDevices = [];
+
+        // UI Elements
+        const scanButton = document.getElementById('scanButton');
+        const deviceListContainer = document.getElementById('deviceListContainer');
+        const deviceList = document.getElementById('deviceList');
+        const selectedDeviceInfo = document.getElementById('selectedDeviceInfo');
+        const formatTabs = document.querySelectorAll('.format-tab');
+        const formatInputs = document.querySelectorAll('.format-input');
+
+        // Ensure the client is ready
+        if (!streamDeckClient) {
+            console.warn('SDPIComponents.streamDeckClient not available');
+        } else {
+            streamDeckClient.getConnectionInfo().then(() => {
+                console.log('Property Inspector connected');
+            });
+
+            // Messages from plugin (sdpi-components v4)
+            streamDeckClient.sendToPropertyInspector.subscribe((ev) => {
+                const payload = ev?.payload || {};
+                const { event, settings, device, services } = payload || {};
+                switch (event) {
+                    case 'settingsUpdate':
+                        currentSettings = settings || {};
+                        updateUIFromSettings();
+                        break;
+                    case 'deviceDiscovered':
+                        if (device) addDiscoveredDevice(device);
+                        break;
+                    case 'scanComplete':
+                        scanButton.textContent = 'Scan for Devices';
+                        scanButton.disabled = false;
+                        if (discoveredDevices.length === 0) {
+                            deviceList.innerHTML = '<div class="scan-status">No devices found</div>';
+                        }
+                        break;
+                    case 'settingsSaved':
+                        console.log('Settings saved!');
+                        break;
+                    case 'error':
+                        alert(payload?.message || 'Unknown error');
+                        break;
+                }
+            });
+        }
+
+        // Scan button click
+        scanButton.addEventListener('click', () => {
+            discoveredDevices = [];
+            deviceList.innerHTML = '<div class="scan-status">Scanning...</div>';
+            deviceListContainer.style.display = 'block';
+            scanButton.textContent = 'Scanning...';
+            scanButton.disabled = true;
+
+            if (streamDeckClient) {
+                streamDeckClient.send('sendToPlugin', { event: 'scanDevices' });
+            } else {
+                console.warn('Cannot send to plugin: streamDeckClient is not available');
+            }
+        });
+
+        // Device selection
+        function addDiscoveredDevice(device) {
+            discoveredDevices.push(device);
+            if (deviceList.querySelector('.scan-status')) {
+                deviceList.innerHTML = '';
+            }
+            const deviceItem = document.createElement('div');
+            deviceItem.className = 'device-item';
+            if (device.id === currentSettings.deviceId) {
+                deviceItem.classList.add('selected');
+            }
+            deviceItem.innerHTML = `
+                <div class="device-info">
+                    <div class="device-name">${device.name}</div>
+                    <div class="device-address">${device.address}</div>
+                </div>
+                <div class="device-rssi">${device.rssi} dBm</div>
+            `;
+            deviceItem.addEventListener('click', () => selectDevice(device));
+            deviceList.appendChild(deviceItem);
+        }
+
+        function selectDevice(device) {
+            currentSettings.deviceId = device.id;
+            currentSettings.deviceName = device.name;
+            currentSettings.deviceAddress = device.address;
+            document.querySelectorAll('.device-item').forEach(item => item.classList.remove('selected'));
+            event.currentTarget.classList.add('selected');
+            updateSelectedDeviceInfo();
+            serviceConfig.style.display = 'block';
+            commandConfig.style.display = 'block';
+            if (streamDeckClient) {
+                streamDeckClient.send('sendToPlugin', { event: 'getServices', payload: { deviceId: device.id } });
+                streamDeckClient.send('sendToPlugin', { event: 'saveSettings', payload: currentSettings });
+            }
+        }
+
+        function updateSelectedDeviceInfo() {
+            if (currentSettings.deviceId) {
+                selectedDeviceInfo.style.display = 'block';
+                document.getElementById('selectedDeviceName').textContent = currentSettings.deviceName || 'Unknown Device';
+                document.getElementById('selectedDeviceAddress').textContent = currentSettings.deviceAddress || '';
+                serviceConfig.style.display = 'block';
+                commandConfig.style.display = 'block';
+            }
+        }
+
+        // Populate UI with current settings
+        function updateUIFromSettings() {
+            try {
+                updateSelectedDeviceInfo();
+
+                // Service select/manual
+                if (currentSettings.serviceUuid) {
+                    const opt = serviceSelect.querySelector(`option[value="${currentSettings.serviceUuid}"]`);
+                    if (opt) {
+                        serviceSelect.value = currentSettings.serviceUuid;
+                        serviceManual.value = '';
+                    } else {
+                        serviceSelect.value = '';
+                        serviceManual.value = currentSettings.serviceUuid;
+                    }
+                }
+
+                // Characteristic select/manual
+                if (currentSettings.characteristicUuid) {
+                    const opt = characteristicSelect.querySelector(`option[value="${currentSettings.characteristicUuid}"]`);
+                    if (opt) {
+                        characteristicSelect.value = currentSettings.characteristicUuid;
+                        characteristicManual.value = '';
+                    } else {
+                        characteristicSelect.value = '';
+                        characteristicManual.value = currentSettings.characteristicUuid;
+                    }
+                }
+
+                // Command format + data
+                if (currentSettings.command) {
+                    const format = currentSettings.command.format || 'hex';
+                    formatTabs.forEach(t => t.classList.toggle('active', t.dataset.format === format));
+                    formatInputs.forEach(input => {
+                        input.style.display = input.id === `${format}Input` ? 'block' : 'none';
+                    });
+                    if (format === 'hex') {
+                        const el = document.getElementById('commandHex');
+                        if (el) el.value = currentSettings.command.data || '';
+                    } else if (format === 'text') {
+                        const el = document.getElementById('commandText');
+                        if (el) el.value = currentSettings.command.data || '';
+                    } else if (format === 'bytes') {
+                        const el = document.getElementById('commandBytes');
+                        if (el) el.value = Array.isArray(currentSettings.command.data) ? currentSettings.command.data.join(', ') : '';
+                    }
+                }
+
+                // Write option
+                const wr = document.getElementById('withoutResponse');
+                if (wr) wr.checked = !!currentSettings.withoutResponse;
+            } catch (err) {
+                console.warn('updateUIFromSettings failed', err);
+            }
+        }
+
+        function populateServices(services) {
+            serviceSelect.innerHTML = '<option value="">Select a service...</option>';
+            services.forEach(service => {
+                const option = document.createElement('option');
+                option.value = service.uuid;
+                option.textContent = service.name || service.uuid;
+                serviceSelect.appendChild(option);
+            });
+            serviceSelect.addEventListener('change', (e) => {
+                const selectedService = services.find(s => s.uuid === e.target.value);
+                if (selectedService) {
+                    populateCharacteristics(selectedService.characteristics || []);
+                    currentSettings.serviceUuid = e.target.value;
+                    serviceManual.value = '';
+                    if (streamDeckClient) streamDeckClient.send('sendToPlugin', { event: 'saveSettings', payload: currentSettings });
+                }
+            });
+        }
+
+        function populateCharacteristics(characteristics) {
+            characteristicSelect.innerHTML = '<option value="">Select a characteristic...</option>';
+            characteristics.forEach(char => {
+                const option = document.createElement('option');
+                option.value = char.uuid;
+                option.textContent = `${char.name || char.uuid} [${char.properties.join(', ')}]`;
+                characteristicSelect.appendChild(option);
+            });
+        }
+
+        serviceManual.addEventListener('input', (e) => {
+            if (e.target.value) {
+                serviceSelect.value = '';
+                currentSettings.serviceUuid = e.target.value;
+                if (streamDeckClient) streamDeckClient.send('sendToPlugin', { event: 'saveSettings', payload: currentSettings });
+            }
+        });
+
+        characteristicManual.addEventListener('input', (e) => {
+            if (e.target.value) {
+                characteristicSelect.value = '';
+                currentSettings.characteristicUuid = e.target.value;
+                if (streamDeckClient) streamDeckClient.send('sendToPlugin', { event: 'saveSettings', payload: currentSettings });
+            }
+        });
+
+        characteristicSelect.addEventListener('change', (e) => {
+            if (e.target.value) {
+                currentSettings.characteristicUuid = e.target.value;
+                characteristicManual.value = '';
+                
+                if (streamDeckClient) streamDeckClient.send('sendToPlugin', { event: 'saveSettings', payload: currentSettings });
+            }
+        });
+
+        formatTabs.forEach(tab => {
+            tab.addEventListener('click', () => {
+                formatTabs.forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+                const format = tab.dataset.format;
+                formatInputs.forEach(input => {
+                    input.style.display = input.id === `${format}Input` ? 'block' : 'none';
+                });
+                if (!currentSettings.command) currentSettings.command = { type: 'write', format, data: '' };
+                else currentSettings.command.format = format;
+                if (streamDeckClient) streamDeckClient.send('sendToPlugin', { event: 'saveSettings', payload: currentSettings });
+            });
+        });
+
+        document.getElementById('commandHex').addEventListener('input', (e) => {
+            updateCommand('hex', e.target.value);
+        });
+        document.getElementById('commandText').addEventListener('input', (e) => {
+            updateCommand('text', e.target.value);
+        });
+        document.getElementById('commandBytes').addEventListener('input', (e) => {
+            const bytes = e.target.value.replace(/[\[\]]/g, '').split(',').map(b => parseInt(b.trim())).filter(b => !isNaN(b));
+            updateCommand('bytes', bytes);
+        });
+
+        document.getElementById('withoutResponse').addEventListener('change', (e) => {
+            currentSettings.withoutResponse = e.target.checked;
+            if (streamDeckClient) streamDeckClient.send('sendToPlugin', { event: 'saveSettings', payload: currentSettings });
+        });
+
+        function updateCommand(format, data) {
+            if (!currentSettings.command) {
+                currentSettings.command = { type: 'write', format, data };
+            } else {
+                currentSettings.command.format = format;
+                currentSettings.command.data = data;
+            }
+            if (streamDeckClient) streamDeckClient.send('sendToPlugin', { event: 'saveSettings', payload: currentSettings });
+        }
+
+        testButton.addEventListener('click', () => {
+            if (streamDeckClient) streamDeckClient.send('sendToPlugin', { event: 'testCommand', payload: currentSettings });
+        });
+    </script>
+</body>
+</html>
