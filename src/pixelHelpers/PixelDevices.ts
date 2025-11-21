@@ -19,17 +19,17 @@ export const PixelsDevices = {
 
     let pixelDevice = undefined;
     for await (const peripheral of noble.discoverAsync()) {
-        if (id) {
-            if (peripheral.id === id) {
-                pixelDevice = peripheral;
-                console.log("Pixel device found:", peripheral.id);
-                break;
-            }
-        } else if (peripheral.advertisement.localName === "D20") {
-            pixelDevice = peripheral;
-            console.log("Pixel device found:", peripheral.id);
-            break;
+      if (id) {
+        if (peripheral.id === id) {
+          pixelDevice = peripheral;
+          console.log("Pixel device found:", peripheral.id);
+          break;
         }
+      } else if (peripheral.advertisement.localName === "D20") {
+        pixelDevice = peripheral;
+        console.log("Pixel device found:", peripheral.id);
+        break;
+      }
     }
 
     await noble.stopScanningAsync();
