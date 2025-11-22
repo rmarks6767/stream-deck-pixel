@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html>
+<head lang="en">
+    <title>Pixel Device Finder</title>
+    <meta charset="utf-8" />
+    <script src="./libs/sdpi-components.js"></script>
+    <style>
+        .device-list {
+            max-height: 150px;
+            overflow-y: auto;
+            border: 1px solid #2D2D2D;
+            border-radius: 4px;
+            margin: 5px 0;
+        }
+        .device-item {
+            padding: 8px;
+            cursor: pointer;
+            border-bottom: 1px solid #2D2D2D;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .device-item:hover {
+            background-color: #3A3A3A;
+        }
+        .device-item.selected {
+            background-color: #0091FF;
+            color: white;
+        }
+        .device-info {
+            flex: 1;
+        }
+        .device-name {
+            font-weight: bold;
+        }
+        .device-address {
+            font-size: 0.9em;
+            opacity: 0.7;
+        }
+        .device-rssi {
+            font-size: 0.9em;
+        }
+        .scan-status {
+            text-align: center;
+            padding: 10px;
+            font-style: italic;
+        }
+        .service-select, .characteristic-select {
+            margin: 5px 0;
+        }
+        .command-format-tabs {
+            display: flex;
+            gap: 5px;
+            margin: 10px 0;
+        }
+        .format-tab {
+            flex: 1;
+            padding: 8px;
+            text-align: center;
+            cursor: pointer;
+            background-color: #2D2D2D;
+            border-radius: 4px;
+        }
+        .format-tab.active {
+            background-color: #0091FF;
+            color: white;
+        }
+        .command-input-container {
+            margin: 10px 0;
+        }
+        .help-text {
+            font-size: 0.85em;
+            opacity: 0.7;
+            margin-top: 5px;
+        }
+        .test-button {
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body>
+    <sdpi-item id="device-container" label="Select">
+        <sdpi-select
+            setting="deviceId"
+            datasource="getDevices"
+            loading="Scanning for devices..."
+            hot-reload
+        >
+        </sdpi-select>
+        <sdpi-button onclick="SDPIComponents.streamDeckClient.send('sendToPlugin', { event: 'scanForDevices' })" id="scan-button">
+            Refresh Devices
+        </sdpi-button>
+    </sdpi-item>
+
+    <script>
+        const { streamDeckClient } = SDPIComponents || {};
+
+        const scanButton = document.getElementById('scan-button');
+        const deviceContainer = document.getElementById('device-container');
+
+        streamDeckClient.sendToPropertyInspector.subscribe((ev) => {
+            const payload = ev?.payload || {};
+            const { event, settings, device, services } = payload || {};
+            switch (event) {
+                case 'settingsUpdate':
+                    currentSettings = settings || {};
+                    updateUIFromSettings();
+                    break;
+                case 'deviceDiscovered':
+                    if (device) addDiscoveredDevice(device);
+                    break;
+                case 'scanComplete':
+                    scanButton.textContent = 'Scan for Devices';
+                    scanButton.disabled = false;
+                    if (discoveredDevices.length === 0) {
+                        deviceList.innerHTML = '<div class="scan-status">No devices found</div>';
+                    }
+                    break;
+                case 'settingsSaved':
+                    console.log('Settings saved!');
+                    break;
+                case 'error':
+                    alert(payload?.message || 'Unknown error');
+                    break;
+            }
+        });
+
+    </script>
+</body>
+</html>

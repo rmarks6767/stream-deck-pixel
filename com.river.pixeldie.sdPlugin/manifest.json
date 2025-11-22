@@ -4,11 +4,27 @@
 	"Author": "River",
 	"Actions": [
 		{
-			"Name": "Counter",
-			"UUID": "com.river.pixeldie.connect",
+			"Name": "Battery",
+			"UUID": "com.river.pixeldie.battery",
 			"Icon": "imgs/actions/counter/icon",
-			"Tooltip": "Displays a count, which increments by one on press.",
-			"PropertyInspectorPath": "ui/increment-counter.html",
+			"Tooltip": "Displays the current battery level of the connected Pixel Die.",
+			"PropertyInspectorPath": "ui/find-devices.html",
+			"Controllers": [
+				"Keypad"
+			],
+			"States": [
+				{
+					"Image": "imgs/actions/counter/key",
+					"TitleAlignment": "middle"
+				}
+			]
+		},
+		{
+			"Name": "Roll",
+			"UUID": "com.river.pixeldie.roll",
+			"Icon": "imgs/actions/counter/icon",
+			"Tooltip": "Displays the rolling status of the connected Pixel Die.",
+			"PropertyInspectorPath": "ui/find-devices.html",
 			"Controllers": [
 				"Keypad"
 			],

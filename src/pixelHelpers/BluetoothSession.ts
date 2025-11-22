@@ -3,40 +3,12 @@ import {
   PixelSession,
 } from "@systemic-games/pixels-core-connect";
 import noble, { Peripheral, Characteristic } from "@stoprocent/noble";
-import { PixelsDevices } from "./PixelDevices";
 
 class BluetoothError extends Error {
   constructor(message?: string) {
     super(message);
     this.name = "BluetoothError";
   }
-}
-
-class ScanTimeoutError extends Error {
-  constructor(message?: string) {
-    super(message);
-    this.name = "ScanTimeoutError";
-  }
-}
-
-async function scanForDevice(device: BluetoothDevice): Promise<void> {
-  return new Promise((resolve, reject) => {
-    const timeoutId = setTimeout(() => {
-      abortController.abort();
-      reject(new ScanTimeoutError());
-    }, 5000);
-    const abortController = new AbortController();
-    device.addEventListener("advertisementreceived", () => {
-      clearTimeout(timeoutId);
-      abortController.abort();
-      resolve();
-    });
-    device
-      .watchAdvertisements({
-        signal: abortController.signal,
-      })
-      .catch((error) => reject(error));
-  });
 }
 
 export class BleSessionError extends Error {
@@ -47,162 +19,199 @@ export class BleSessionError extends Error {
 }
 
 /**
- * Represents a Bluetooth session with a Pixel die,
- * using Web Bluetooth.
+ * Noble-based BLE session for Pixel dice.
  */
 export default class BleSession extends PixelSession {
-  private _device: Peripheral;
+  private _peripheral?: Peripheral;
   private _notify?: Characteristic;
   private _write?: Characteristic;
-  private _disposeFunc: () => void;
+  private _disconnectHandler?: () => void;
 
-  constructor(systemId: string, name?: string) {
-    super(systemId, name);
-    const device = PixelsDevices.getKnownDevice(systemId);
-    if (!device) {
-      throw new BleSessionError(
-        `No known Bluetooth device with system id: ${systemId}`
-      );
-    }
-    this._device = device;
-    if (!this.pixelName && device.name) {
-      // Only set the name if it's not already set, as the current name may be more up-to-date because of OS caching
-      this._setName(device.name);
-    }
-
-    // Subscribe to disconnect event
-    const onConnection = (/*ev: Event*/) => {
-      // let reason: ConnectionEventReason = ConnectionEventReasonValues.Success;
-      // if (this._connected) {
-      //   // Disconnect not called by user code
-      //   reason = this._reconnect
-      //     ? ConnectionEventReasonValues.LinkLoss
-      //     : ConnectionEventReasonValues.Timeout;
-      // }
-      if (!this.pixelName && device.name) {
-        // Only set the name if it's not already set, as the current name may be more up-to-date because of OS caching
-        this._setName(device.name);
-      }
-      // Notify disconnection
-      this._notifyConnectionEvent("disconnected");
-    };
-    device.addEventListener("gattserverdisconnected", onConnection);
-    this._disposeFunc = () => {
-      this.setConnectionEventListener(undefined);
-      device.addEventListener("gattserverdisconnected", onConnection);
-    };
+  constructor(systemId: string) {
+    super(systemId);
   }
 
   dispose(): void {
-    this._disposeFunc();
+    this.setConnectionEventListener(undefined);
+    if (this._peripheral && this._disconnectHandler) {
+      this._peripheral.removeListener("disconnect", this._disconnectHandler);
+      this._disconnectHandler = undefined;
+    }
   }
 
   async connect(timeoutMs: number): Promise<void> {
-    const server = this._device.gatt;
-    if (!server) {
-      throw new BluetoothError("Gatt server not available");
-    }
-    if (!server.connected) {
-      // Timeout
-      let hasTimedOut = false;
-      const setupTimeout = () =>
-        timeoutMs > 0 &&
-        setTimeout(() => {
-          // Disconnect on timeout
-          hasTimedOut = true;
-          this.disconnect().catch(() => {});
-        }, timeoutMs);
-      let timeoutId = setupTimeout();
+    console.log("BleSession.connect", this.systemId);
 
-      try {
-        // Attempt to connect
-        this._notifyConnectionEvent("connecting");
-        await server.connect();
-      } catch (error) {
-        let lastError = error as Error | undefined;
+    if (this._peripheral && this._peripheral.state === "connected") {
+      this._notifyConnectionEvent("ready");
+      return;
+    }
+
+    const uuids = PixelsBluetoothIds.legacyDie;
+
+    // Wait for adapter/poweredOn
+    try {
+      await noble.waitForPoweredOnAsync?.(timeoutMs ?? 10000);
+    } catch (err) {
+      this._notifyConnectionEvent("disconnected", "bluetoothOff");
+      throw new BluetoothError("Bluetooth adapter not available");
+    }
+
+    this._notifyConnectionEvent("connecting");
+
+    // Start scanning for the service
+    await noble.startScanningAsync?.([uuids.service], false).catch(() => {});
+
+    let found: Peripheral | undefined;
+    try {
+      for await (const peripheral of noble.discoverAsync?.() ?? []) {
+        // match by id or name
         if (
-          //@ts-ignore watchAdvertisements() may not exist
-          this._device.watchAdvertisements &&
-          lastError?.message?.includes("no longer in range")
+          peripheral.id === this.systemId ||
+          peripheral.advertisement?.localName === this.systemId
         ) {
-          // Connection possibly failed because device was never scanned
-          try {
-            timeoutId && clearTimeout(timeoutId);
-            await scanForDevice(this._device);
-            timeoutId = setupTimeout();
-            await server.connect();
-            lastError = undefined;
-          } catch (error) {
-            if (!(error instanceof ScanTimeoutError)) {
-              lastError = error as Error;
-            }
-          }
+          found = peripheral;
+          break;
         }
-        // Check if the error was caused by the connection timeout
-        if (hasTimedOut) {
-          lastError = new Error("Connection timeout");
-        }
-        if (lastError) {
-          this._notifyConnectionEvent("disconnected");
-          throw lastError;
-        }
-      } finally {
-        timeoutId && clearTimeout(timeoutId);
       }
-
-      // Get Pixel service and characteristics
-      this._notifyConnectionEvent("connected");
-      const uuids = PixelsBluetoothIds.legacyDie;
-      const service = await server.getPrimaryService(uuids.service);
-      this._notify = await service.getCharacteristic(
-        uuids.notifyCharacteristic
-      );
-      this._write = await service.getCharacteristic(uuids.writeCharacteristic);
+    } finally {
+      try {
+        await noble.stopScanningAsync?.();
+      } catch (e) {
+        // ignore
+      }
     }
-    // Note: always notify the ready state so a new status listener will
-    //       get the notification if even the device was already connected.
+
+    if (!found) {
+      this._notifyConnectionEvent("disconnected", "timeout");
+      throw new BleSessionError("Peripheral not found");
+    }
+
+    this._peripheral = found;
+
+    // attach disconnect handler
+    this._disconnectHandler = () => {
+      this._notifyConnectionEvent("disconnected", "linkLoss");
+    };
+    this._peripheral.on("disconnect", this._disconnectHandler);
+
+    try {
+      await this._peripheral.connectAsync();
+    } catch (err) {
+      this._notifyConnectionEvent("disconnected", "peripheral");
+      throw err;
+    }
+
+    this._notifyConnectionEvent("connected");
+
+    const { services, characteristics } =
+      await this._peripheral.discoverAllServicesAndCharacteristicsAsync();
+
+    this._notify = characteristics.find(
+      (c) => c.uuid === uuids.notifyCharacteristic
+    );
+    this._write = characteristics.find(
+      (c) => c.uuid === uuids.writeCharacteristic
+    );
+
+    // fallback: find by properties
+    if (!this._notify) {
+      this._notify = characteristics.find((c) => c.properties?.includes?.("notify"));
+    }
+    if (!this._write) {
+      this._write = characteristics.find((c) => c.properties?.includes?.("write"));
+    }
+
     this._notifyConnectionEvent("ready");
   }
 
   async disconnect(): Promise<void> {
-    this._device.gatt?.disconnect();
+    console.log("BleSession.disconnect", this.systemId);
+
+    try {
+      await this._peripheral?.disconnectAsync?.();
+    } catch (_) {
+      // ignore
+    } finally {
+      if (this._peripheral && this._disconnectHandler) {
+        this._peripheral.removeListener("disconnect", this._disconnectHandler);
+        this._disconnectHandler = undefined;
+      }
+      this._peripheral = undefined;
+      this._notify = undefined;
+      this._write = undefined;
+      this._notifyConnectionEvent("disconnected", "success");
+    }
   }
 
   async subscribe(listener: (dataView: DataView) => void): Promise<() => void> {
+    console.log("BleSession.subscribe", this.systemId);
+
     if (!this._notify) {
       throw new BleSessionError("Not connected");
     }
-    function internalListener(this: BluetoothRemoteGATTCharacteristic) {
-      if (this.value?.buffer?.byteLength) {
-        listener(this.value);
+
+    const handler = (data: Buffer) => {
+      if (!data || !data.buffer) return;
+      const dv = new DataView(data.buffer, data.byteOffset, data.byteLength);
+      try {
+        listener(dv);
+      } catch (e) {
+        // swallow listener errors
+        console.warn("subscribe listener error:", e);
       }
+    };
+
+    this._notify.on("data", handler);
+
+    try {
+      if ((this._notify as any).subscribeAsync) {
+        await (this._notify as any).subscribeAsync();
+      } else if ((this._notify as any).subscribe) {
+        await new Promise<void>((res, rej) =>
+          (this._notify as any).subscribe((err: any) => (err ? rej(err) : res()))
+        );
+      } else if ((this._notify as any).notify) {
+        (this._notify as any).notify(true, () => {});
+      }
+    } catch (err) {
+      this._notify.removeListener("data", handler);
+      throw err;
     }
-    const notifyCharac = this._notify;
-    notifyCharac.addEventListener(
-      "characteristicvaluechanged",
-      internalListener
-    );
-    await notifyCharac.startNotifications();
-    return () => {
-      notifyCharac.removeEventListener(
-        "characteristicvaluechanged",
-        internalListener
-      );
+
+    return async () => {
+      try {
+        if ((this._notify as any).unsubscribeAsync) {
+          await (this._notify as any).unsubscribeAsync();
+        } else if ((this._notify as any).unsubscribe) {
+          await new Promise<void>((res) => (this._notify as any).unsubscribe(() => res()));
+        } else if ((this._notify as any).notify) {
+          (this._notify as any).notify(false, () => {});
+        }
+      } catch (_) {
+        // ignore
+      }
+      this._notify?.removeListener("data", handler);
     };
   }
 
   async writeValue(
     data: ArrayBuffer,
     withoutResponse?: boolean,
-    _timeoutMs?: number // Default is Constants.defaultRequestTimeout
+    _timeoutMs?: number
   ): Promise<void> {
     if (!this._write) {
       throw new BleSessionError("Not connected");
     }
-    if (withoutResponse) {
-      await this._write.writeValueWithoutResponse(data);
+    const buf = Buffer.isBuffer(data) ? (data as any) : Buffer.from(data as ArrayBuffer);
+    if ((this._write as any).writeAsync) {
+      await (this._write as any).writeAsync(buf, !!withoutResponse);
+    } else if ((this._write as any).write) {
+      await new Promise<void>((res, rej) =>
+        (this._write as any).write(buf, !!withoutResponse, (err: any) => (err ? rej(err) : res()))
+      );
     } else {
-      await this._write.writeValueWithResponse(data);
+      throw new BleSessionError("Write method not available on characteristic");
     }
   }
 }
