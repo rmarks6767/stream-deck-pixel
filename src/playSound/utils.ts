@@ -2,6 +2,10 @@ import {execSync} from 'child_process';
 import {platform} from 'os';
 // import {quote} from 'shell-quote';
 
+/**
+ *
+ * @param args
+ */
 function simpleQuote(args: string[]): string {
 	return args
 		.map((arg) => {
@@ -14,6 +18,10 @@ function simpleQuote(args: string[]): string {
 		.join(' ');
 }
 
+/**
+ *
+ * @param command
+ */
 function isExec(command: string): boolean {
 	try {
 		execSync(simpleQuote(command.split(' ')), {stdio: 'ignore'});
@@ -23,6 +31,9 @@ function isExec(command: string): boolean {
 	}
 }
 
+/**
+ *
+ */
 function findCommand(): string {
 	if (/^win/.test(platform())) {
 		return 'where';
@@ -31,6 +42,10 @@ function findCommand(): string {
 	}
 }
 
+/**
+ *
+ * @param commands
+ */
 export function findExec(...commands: string[]): string | null {
 	const find = findCommand();
 	for (const command of commands) {

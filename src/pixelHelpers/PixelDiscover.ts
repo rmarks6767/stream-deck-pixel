@@ -1,103 +1,196 @@
-import streamDeck, { DidReceiveSettingsEvent, JsonObject, SendToPluginEvent, WillAppearEvent } from "@elgato/streamdeck";
+import streamDeck, {
+	DidReceiveSettingsEvent,
+	JsonObject,
+	PropertyInspectorDidDisappearEvent,
+	SendToPluginEvent,
+	WillAppearEvent,
+	WillDisappearEvent,
+} from "@elgato/streamdeck";
 import { SingletonAction } from "@elgato/streamdeck";
-import noble, { Peripheral } from "@stoprocent/noble";
-import { Pixel, pixelManager } from "./PixelManager";
+import { PixelManager } from "./PixelManager";
 
 export interface DiscoverSettings extends JsonObject {
-    deviceId?: string;
+  /**
+   *
+   */
+  deviceId?: string;
+  /**
+   *
+   */
+  previousDeviceId?: string;
 }
 
 interface PluginEvent extends JsonObject {
-    event: "getDevices";
+  /**
+   *
+   */
+  event: "getDevices";
 }
 
-const knownDevices = ['D20', 'D12', 'D8', 'D6', 'D4'];
+/**
+ *
+ */
+export class PixelDiscover<T extends DiscoverSettings> extends SingletonAction<T> {
+	/**
+	 *
+	 */
+	pixelManager: PixelManager;
 
-export class PixelDiscover extends SingletonAction<DiscoverSettings> {
-    protected selectedPixel: Pixel | null = null;
-    peripherals: Map<string, Peripheral> = new Map();
-    uuid: string = crypto.randomUUID();
+	/**
+	 *
+	 * @param pixelManager
+	 */
+	constructor(pixelManager: PixelManager) {
+		super();
 
-    async connect (settings: DiscoverSettings) {
-        console.log(settings.deviceId && !this.selectedPixel)
+		this.pixelManager = pixelManager;
+	}
 
-        if (settings.deviceId && (!this.selectedPixel || !this.selectedPixel.isConnected)) {
-            this.selectedPixel = await pixelManager.connect(settings.deviceId, this.uuid);
-        }
-    }
+	/**
+	 *
+	 * @param deviceId
+	 * @param ev
+	 */
+	private async connectToDevice(
+		deviceId: string,
+		ev:
+      DidReceiveSettingsEvent<DiscoverSettings> | WillAppearEvent<DiscoverSettings>
+	) {
+		try {
+			console.log(
+        `[PixelDiscover.connectToDevice]: Attempting to connect to ${deviceId}`
+			);
+			const device = await this.pixelManager.connect(deviceId, ev.action.id);
 
-    override async onWillAppear(ev: WillAppearEvent<DiscoverSettings>): Promise<void> {
-        const settings = await ev.action.getSettings<DiscoverSettings>();
+			console.log(
+        `[PixelDiscover.connectToDevice.${ev.action.id}]: Connected to device`,
+        device
+			);
+		} catch (error) {
+			console.error(
+        `[PixelDiscover.connectToDevice]: Failed to connect to device, clearing and alerting`,
+        error
+			);
 
-        await this.connect(settings)
-    }
+			await ev.action.showAlert();
+			await ev.action.setSettings({
+				deviceId: undefined,
+			});
+		}
+	}
 
-    private discoverDevicesAndSend = async () => {
-        const devices: { label: string; value: string }[] = [];
-        pixelManager.getConnectedPixels().forEach(device => {
-            devices.push({
-                label: `[CONNECTED] D20 ${device.id}`,
-                value: device.id,
-            });
-        });
+	/**
+	 *
+	 * @param ev
+	 */
+	override async onSendToPlugin(
+		ev: SendToPluginEvent<PluginEvent, JsonObject>
+	): Promise<void> {
+		console.log(`[onSendToPlugin.event]: `, ev);
 
+		if (ev.payload.event === "getDevices") {
+			// console.log(`[PixelDiscover.onSendToPlugin]: Starting discover`);
+			await this.pixelManager.startDiscover(
+				ev.action.id,
+				async ({ connectedDevices, discoveredDevices }) => {
+					console.log(connectedDevices);
 
-        await noble.waitForPoweredOnAsync(10000);
-        await noble.startScanningAsync(
-            // [PixelsBluetoothIds.legacyDie.service, PixelsBluetoothIds.die.service],
-            // false
-        );
+					await streamDeck.ui.current?.sendToPropertyInspector({
+						event: "getDevices",
+						items: [
+							{
+								label: "None",
+								value: "",
+							},
+							...(connectedDevices.length
+								? [
+									...connectedDevices.map((device) => ({
+										label: `[CONNECTED]: ${device.advertisement.localName} (${device.id})`,
+										value: device.id,
+									})),
+								]
+								: []),
+							...discoveredDevices.map((device) => ({
+								label: `${device.advertisement.localName} (${device.id})`,
+								value: device.id,
+							})),
+						],
+					});
+				}
+			);
+		}
+	}
 
-        if (!devices.length) {
-            devices.push({
-                label: "None",
-                value: "",
-            })
-        }
+	/**
+	 *
+	 * @param ev
+	 */
+	override async onWillAppear(
+		ev: WillAppearEvent<DiscoverSettings>
+	): Promise<void> {
+		if (ev.payload.settings.deviceId) {
+			await this.connectToDevice(ev.payload.settings.deviceId, ev);
+		}
+	}
 
-        await streamDeck.ui.current?.sendToPropertyInspector({
-            event: "getDevices",
-            items: devices,
-        });
-        
-        noble.on('discover', async (peripheral: Peripheral) => {
-            console.log("Discovered peripheral: ", peripheral.advertisement.localName, peripheral.id);
+	/**
+	 *
+	 * @param ev
+	 */
+	override async onDidReceiveSettings(
+		ev: DidReceiveSettingsEvent<DiscoverSettings>
+	): Promise<void> {
+		console.log(`[PixelDiscover.onDidReceiveSettings.${ev.action.id}]: `, ev);
 
-            if (knownDevices.includes(peripheral.advertisement.localName)) {
-                this.peripherals.set(peripheral.id, peripheral);
+		const { settings } = ev.payload;
 
-                devices.push({ 
-                    label: `${peripheral.advertisement.localName} (${peripheral.id})`,
-                    value: peripheral.id
-                });
+		if (
+			settings.previousDeviceId &&
+      settings.deviceId !== settings.previousDeviceId
+		) {
+			console.log(
+        `[PixelDiscover.onDidReceiveSettings.${ev.action.id}]: Disconnecting previous device`
+			);
 
-                await streamDeck.ui.current?.sendToPropertyInspector({
-                    event: "getDevices",
-                    items: devices,
-                });
-            }
-        });
+			await this.pixelManager.disconnect(
+				settings.previousDeviceId,
+				ev.action.id
+			);
+		}
 
-        setTimeout(async () => {
-            await noble.stopScanningAsync();
-        }, 10000);
+		if (settings.deviceId && settings.previousDeviceId !== settings.deviceId) {
+			console.log("Connect to device");
+			await this.connectToDevice(settings.deviceId, ev);
+		}
 
-    }
+		await ev.action.setSettings({
+			deviceId: settings.deviceId,
+			previousDeviceId: settings.deviceId,
+		});
+	}
 
-    override async onSendToPlugin(ev: SendToPluginEvent<PluginEvent, JsonObject>): Promise<void> {
-        if(ev.payload.event === "getDevices") {
-            console.log("Received getDevices event");
-            await this.discoverDevicesAndSend();
-        }
-    }
+	/**
+	 *
+	 * @param ev
+	 */
+	override async onWillDisappear(ev: WillDisappearEvent<DiscoverSettings>): Promise<void> {
+		// console.log(await streamDeck.settings.)
 
-    override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<DiscoverSettings>): Promise<void> {        
-        if (this.selectedPixel && (!ev.payload.settings.deviceId || ev.payload.settings.deviceId !== this.selectedPixel.id)) {
-            await pixelManager.disconnect(this.selectedPixel.id, this.uuid);
-        }
-        
-        await this.connect(ev.payload.settings);
-        ev.action.setSettings(ev.payload.settings);
-    }
+		console.log("GONE");
+	}
+
+	/**
+	 * When the property inspector disappears, we want to stop discovery
+	 * @param ev
+	 */
+	override async onPropertyInspectorDidDisappear(
+		ev: PropertyInspectorDidDisappearEvent
+	): Promise<void> {
+		console.log(
+      `[PixelDiscover.onPropertyInspectorDidDisappear.${ev.action.id}]: `,
+      ev
+		);
+
+		this.pixelManager.stopDiscover(ev.action.id);
+	}
 }
-

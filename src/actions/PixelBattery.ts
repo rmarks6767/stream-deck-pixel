@@ -1,45 +1,52 @@
-import streamDeck, { DidReceiveSettingsEvent, JsonObject, SendToPluginEvent } from "@elgato/streamdeck";
-import {
-  action,
-  KeyDownEvent,
-  SingletonAction,
-  WillAppearEvent,
-} from "@elgato/streamdeck";
-import { PixelDiscover } from "../pixelHelpers/PixelDiscover";
-import { pixelManager } from "../pixelHelpers/PixelManager";
+import { DidReceiveSettingsEvent } from "@elgato/streamdeck";
+import { action, WillAppearEvent } from "@elgato/streamdeck";
+import { DiscoverSettings, PixelDiscover } from "../pixelHelpers/PixelDiscover";
 
 /**
- * An example action class that displays a count that increments by one each time the button is pressed.
+ * Action that displays the battery percentage of a Pixel Die
  */
 @action({ UUID: "com.river.pixeldie.battery" })
-export class PixelBattery extends PixelDiscover {
-  isListening: boolean = false;
-  lastBatteryUpdateTime: number | null = null;
+export class PixelBattery extends PixelDiscover<DiscoverSettings> {
+	public override async onDidReceiveSettings(
+		ev: DidReceiveSettingsEvent<DiscoverSettings>
+	): Promise<void> {
+		await super.onDidReceiveSettings(ev);
 
-  addListener(ev: WillAppearEvent | DidReceiveSettingsEvent): void {
-    if (!this.isListening && this.selectedPixel) {
-      this.isListening = true;
+		this.registerListener(ev);
+	}
 
-      pixelManager.addEventListener(this.selectedPixel.id, "batteryLevel", async (event: { levelPercent: number; }) => {
-        console.log(event);
-        console.log(`Battery level: ${event.levelPercent}%`);
-        // if (this.lastBatteryUpdateTime === null ||
-            // (Date.now() - this.lastBatteryUpdateTime) > 60000) {
-          // this.lastBatteryUpdateTime = Date.now();
+	public override async onWillAppear(
+		ev: WillAppearEvent<DiscoverSettings>
+	): Promise<void> {
+		await super.onWillAppear(ev);
 
-          await ev.action.setTitle(`${event.levelPercent}%`);
-        // }
-      });
-    }
-  }
+		this.registerListener(ev);
+	}
 
-  override async onWillAppear(ev: WillAppearEvent): Promise<void> {
-    await super.onWillAppear(ev);
-    this.addListener(ev);
-  }
+	private registerListener(
+		ev:
+      DidReceiveSettingsEvent<DiscoverSettings> | WillAppearEvent<DiscoverSettings>
+	) {
+		console.log(
+      `[PixelBattery.${ev.action.id}] Registering listener for ${ev.payload.settings.deviceId}`
+		);
 
-  override async onDidReceiveSettings(ev: DidReceiveSettingsEvent): Promise<void> {
-    await super.onDidReceiveSettings(ev);
-    this.addListener(ev);
-  }
+		if (ev.payload.settings.deviceId) {
+			this.pixelManager.addEventListener(
+				ev.payload.settings.deviceId,
+				ev.action.id,
+				"batteryLevel",
+				async (event: { levelPercent: number }) => {
+					console.log(event);
+					console.log(`Battery level: ${event.levelPercent}%`);
+					// if (this.lastBatteryUpdateTime === null ||
+					// (Date.now() - this.lastBatteryUpdateTime) > 60000) {
+					// this.lastBatteryUpdateTime = Date.now();
+
+					await ev.action.setTitle(`${event.levelPercent}%`);
+					// }
+				}
+			);
+		}
+	}
 }
