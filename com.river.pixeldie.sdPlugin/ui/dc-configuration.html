@@ -1,32 +1,36 @@
-<!DOCTYPE html>
+<!doctype html>
 <html>
-<head lang="en">
-    <title>Pixel DC Configuration</title>
-    <meta charset="utf-8" />
-    <script src="./libs/sdpi-components.js"></script>
-</head>
-<body>
-    <sdpi-item id="device-container" label="Select">
-        <sdpi-radio
-            default="None selected"
-            setting="deviceId"
-            datasource="getDevices"
-            loading="Scanning for devices..."
-            hot-reload
-        >
-        </sdpi-radio>
-    </sdpi-item>
-    <sdpi-item label="Natural 20 Audio">
-        <sdpi-file setting="nat20Audio" accept="audio/mp3, audio/wav"></sdpi-file>
-    </sdpi-item>
-    <sdpi-item label="Natural 1 Audio">
-        <sdpi-file setting="nat1Audio" accept="audio/mp3, audio/wav"></sdpi-file>
-    </sdpi-item>
-    <sdpi-item label="Success Audio">
-        <sdpi-file setting="successAudio" accept="audio/mp3, audio/wav"></sdpi-file>
-    </sdpi-item>
-    <sdpi-item label="Failure Audio">
-        <sdpi-file setting="failureAudio" accept="audio/mp3, audio/wav"></sdpi-file>
-    </sdpi-item>
-</body>
+	<head lang="en">
+		<title>Pixel DC Configuration</title>
+		<meta charset="utf-8" />
+		<script src="./libs/sdpi-components.js"></script>
+	</head>
+	<body>
+		<sdpi-item id="device-container" label="Select">
+			<sdpi-radio
+				default="None selected"
+				setting="deviceId"
+				datasource="getDevices"
+				loading="Scanning for devices..."
+				hot-reload
+			>
+			</sdpi-radio>
+		</sdpi-item>
+		<sdpi-item label="Natural 20">
+			<sdpi-file setting="nat20Audio" accept="audio/mp3, audio/wav"></sdpi-file>
+			<sdpi-color setting="nat20Color"></sdpi-color>
+		</sdpi-item>
+		<sdpi-item label="Natural 1">
+			<sdpi-file setting="nat1Audio" accept="audio/mp3, audio/wav"></sdpi-file>
+			<sdpi-color setting="nat1Color"></sdpi-color>
+		</sdpi-item>
+		<sdpi-item label="Success">
+			<sdpi-file setting="successAudio" accept="audio/mp3, audio/wav"></sdpi-file>
+			<sdpi-color setting="successColor"></sdpi-color>
+		</sdpi-item>
+		<sdpi-item label="Failure">
+			<sdpi-file setting="failureAudio" accept="audio/mp3, audio/wav"></sdpi-file>
+			<sdpi-color setting="failureColor"></sdpi-color>
+		</sdpi-item>
+	</body>
 </html>

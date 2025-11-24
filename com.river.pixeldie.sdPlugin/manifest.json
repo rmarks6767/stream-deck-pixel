@@ -1,90 +1,113 @@
 {
-	"Name": "pixeldie",
-	"Version": "0.1.0.0",
-	"Author": "River",
-	"Actions": [
+    "Name": "pixeldie",
+    "Version": "0.1.0.0",
+    "Author": "River",
+    "Actions": [
+        {
+            "Name": "Difficulty Check",
+            "UUID": "com.river.pixeldie.dc",
+            "Icon": "imgs/actions/counter/icon",
+            "Tooltip": "Allows configuration of Difficulty Check on a given die.",
+            "PropertyInspectorPath": "ui/dc-configuration.html",
+            "UserTitleEnabled": false,
+            "Controllers": [
+                "Keypad"
+            ],
+			"DisableAutomaticStates": true,
+            "States": [
+                {
+                    "Image": "imgs/actions/standard",
+                    "TitleAlignment": "middle"
+                },
+                {
+                    "Image": "imgs/actions/advantage",
+                    "TitleAlignment": "middle"
+                },
+                {
+                    "Image": "imgs/actions/disadvantage",
+                    "TitleAlignment": "middle"
+                }
+            ]
+        },
 		{
-			"Name": "Difficulty Check",
-			"UUID": "com.river.pixeldie.dc",
-			"Icon": "imgs/actions/counter/icon",
-			"Tooltip": "Allows configuration of Difficulty Check on a given die.",
-			"PropertyInspectorPath": "ui/dc-configuration.html",
-			"UserTitleEnabled": false,
-			"Controllers": [
-				"Keypad"
-			],
-			"States": [
-				{
-					"Image": "imgs/actions/counter/key",
-					"TitleAlignment": "middle"
-				},
-								{
-					"Image": "imgs/actions/counter/key",
-					"TitleAlignment": "middle"
-				},
-								{
-					"Image": "imgs/actions/counter/key",
-					"TitleAlignment": "middle"
-				}
-			]
-		},
-		{
-			"Name": "Battery",
-			"UUID": "com.river.pixeldie.battery",
-			"Icon": "imgs/actions/counter/icon",
-			"Tooltip": "Displays the current battery level of the connected Pixel Die.",
-			"PropertyInspectorPath": "ui/find-devices.html",
-			"UserTitleEnabled": false,
-			"Controllers": [
-				"Keypad"
-			],
-			"States": [
-				{
-					"Image": "imgs/actions/counter/key",
-					"TitleAlignment": "middle"
-				}
-			]
-		},
-		{
-			"Name": "Roll",
-			"UUID": "com.river.pixeldie.roll",
-			"Icon": "imgs/actions/counter/icon",
-			"Tooltip": "Displays the rolling status of the connected Pixel Die.",
-			"PropertyInspectorPath": "ui/find-devices.html",
-			"UserTitleEnabled": false,
-			"Controllers": [
-				"Keypad"
-			],
-			"States": [
-				{
-					"Image": "imgs/actions/counter/key",
-					"TitleAlignment": "middle"
-				}
-			]
-		}
-	],
-	"Category": "pixeldie",
-	"CategoryIcon": "imgs/plugin/category-icon",
-	"CodePath": "bin/plugin.js",
-	"Description": "Stream Deck Pixel Die integration for running multi-actions, setting DCs, and interacting with the Pixel Die ",
-	"Icon": "imgs/plugin/marketplace",
-	"SDKVersion": 2,
-	"Software": {
-		"MinimumVersion": "6.5"
-	},
-	"OS": [
-		{
-			"Platform": "mac",
-			"MinimumVersion": "12"
-		},
-		{
-			"Platform": "windows",
-			"MinimumVersion": "10"
-		}
-	],
-	"Nodejs": {
-		"Version": "20",
-		"Debug": "enabled"
-	},
-	"UUID": "com.river.pixeldie"
+            "Name": "Difficulty Check Counter",
+            "UUID": "com.river.pixeldie.dccounter",
+            "Icon": "imgs/actions/counter/icon",
+            "Tooltip": "Allows increasing or decreasing of DC",
+            "PropertyInspectorPath": "ui/dc-counter-configuration.html",
+            "UserTitleEnabled": false,
+            "Controllers": [
+                "Keypad"
+            ],
+			"DisableAutomaticStates": true,
+            "States": [
+                {
+                    "Image": "imgs/actions/counter/key",
+                    "TitleAlignment": "middle"
+                },
+                {
+                    "Image": "imgs/actions/counter/key",
+                    "TitleAlignment": "middle"
+                }
+            ]
+        },
+        {
+            "Name": "Battery",
+            "UUID": "com.river.pixeldie.battery",
+            "Icon": "imgs/actions/counter/icon",
+            "Tooltip": "Displays the current battery level of the connected Pixel Die.",
+            "PropertyInspectorPath": "ui/find-devices.html",
+            "UserTitleEnabled": false,
+            "Controllers": [
+                "Keypad"
+            ],
+            "States": [
+                {
+                    "Image": "imgs/actions/counter/key",
+                    "TitleAlignment": "middle"
+                }
+            ]
+        },
+        {
+            "Name": "Roll",
+            "UUID": "com.river.pixeldie.roll",
+            "Icon": "imgs/actions/counter/icon",
+            "Tooltip": "Displays the rolling status of the connected Pixel Die.",
+            "PropertyInspectorPath": "ui/find-devices.html",
+            "UserTitleEnabled": false,
+            "Controllers": [
+                "Keypad"
+            ],
+            "States": [
+                {
+                    "Image": "imgs/actions/counter/key",
+                    "TitleAlignment": "middle"
+                }
+            ]
+        }
+    ],
+    "Category": "pixeldie",
+    "CategoryIcon": "imgs/plugin/category-icon",
+    "CodePath": "bin/plugin.js",
+    "Description": "Stream Deck Pixel Die integration for running multi-actions, setting DCs, and interacting with the Pixel Die ",
+    "Icon": "imgs/plugin/marketplace",
+    "SDKVersion": 2,
+    "Software": {
+        "MinimumVersion": "6.5"
+    },
+    "OS": [
+        {
+            "Platform": "mac",
+            "MinimumVersion": "12"
+        },
+        {
+            "Platform": "windows",
+            "MinimumVersion": "10"
+        }
+    ],
+    "Nodejs": {
+        "Version": "20",
+        "Debug": "enabled"
+    },
+    "UUID": "com.river.pixeldie"
 }
