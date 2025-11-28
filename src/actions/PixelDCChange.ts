@@ -32,16 +32,15 @@ export class PixelDCCounter extends PixelDiscover<PixelDCCounterSettings> {
 		}
 
 		const globalSettings = await streamDeck.settings.getGlobalSettings<GlobalSettings>()
-
 		const difficulty = globalSettings[ev.payload.settings.deviceId];
 		const { type = CounterType.plus } = ev.payload.settings;
-
 		const newDifficulty = type === CounterType.plus ? difficulty + 1 : difficulty - 1;
 
 		await streamDeck.settings.setGlobalSettings({
 			...globalSettings,
 			[ev.payload.settings.deviceId]: newDifficulty,
 		});
+		await streamDeck.settings.getGlobalSettings<GlobalSettings>()
 	}
 
 	public override async onWillAppear(ev: WillAppearEvent<PixelDCCounterSettings>): Promise<void> {

@@ -89,7 +89,11 @@ export class PixelDC extends PixelDiscover<PixelDCSettings> {
 		this.registerListener(ev);
 	}
 
-	private formatRoll(roll?: number) {
+	private formatRoll(roll?: number | string) {
+		if (typeof roll === 'string') {
+			return roll;
+		}
+
 		if (roll) {
 			return roll < 10 ? ` ${roll}` : String(roll);
 		}
@@ -97,7 +101,7 @@ export class PixelDC extends PixelDiscover<PixelDCSettings> {
 		return "  ";
 	}
 
-	private formatTitle(difficulty: number, type: DCType, roll1?: number, roll2?: number) {
+	private formatTitle(difficulty: number, type: DCType, roll1?: number | string, roll2?: number | string) {
 		if (type === DCType.standard) {
 			return `${difficulty}\n[${this.formatRoll(roll1)}]`;
 		}
@@ -112,6 +116,7 @@ export class PixelDC extends PixelDiscover<PixelDCSettings> {
 
 		const { difficulty = 10, type = DCType.standard } = ev.payload.settings;
 		let rolls: number[] = [];
+		let rollingTitle: string = ': ';
 
 		if (ev.payload.settings.deviceId) {
 			this.pixelManager.addEventListener(
@@ -181,6 +186,12 @@ export class PixelDC extends PixelDiscover<PixelDCSettings> {
 								break;
 							}
 						}
+					} else if (event.state === 3) {
+						const [roll1, roll2] = rolls;
+
+						await ev.action.setTitle(this.formatTitle(difficulty, type, roll1 || rollingTitle, roll2 || rollingTitle));
+
+						rollingTitle = rollingTitle === ': ' ? ' :' : ': ';
 					}
 				},
 			);

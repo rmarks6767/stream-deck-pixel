@@ -1,25 +1,14 @@
-import streamDeck, {
-	DidReceiveSettingsEvent,
-	JsonObject,
-	PropertyInspectorDidDisappearEvent,
-	SendToPluginEvent,
-	WillAppearEvent,
-	// WillDisappearEvent,
-} from "@elgato/streamdeck";
+import streamDeck, { JsonObject, PropertyInspectorDidDisappearEvent, SendToPluginEvent, WillAppearEvent } from "@elgato/streamdeck";
 import { SingletonAction } from "@elgato/streamdeck";
 import { PixelManager } from "./PixelManager";
-
-export interface DiscoverSettings extends JsonObject {
-	deviceId?: string;
-	previousDeviceId?: string;
-}
 
 interface PluginEvent extends JsonObject {
 	event: "getDevices";
 }
 
-export class PixelDiscover<T extends DiscoverSettings> extends SingletonAction<T> {
+export class PixelDiscover extends SingletonAction {
 	protected pixelManager: PixelManager;
+	private deleteTime: number = 0;
 
 	constructor(pixelManager: PixelManager) {
 		super();
@@ -27,27 +16,31 @@ export class PixelDiscover<T extends DiscoverSettings> extends SingletonAction<T
 		this.pixelManager = pixelManager;
 	}
 
-	public override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<DiscoverSettings>): Promise<void> {
-		console.log(`[PixelDiscover.onDidReceiveSettings.${ev.action.id}]: `, ev);
+	// public override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<DiscoverSettings>): Promise<void> {
+	// 	console.log(`[PixelDiscover.onDidReceiveSettings.${ev.action.id}]: `, ev);
 
-		const { settings } = ev.payload;
+	// 	const { settings } = ev.payload;
 
-		if (settings.previousDeviceId && settings.deviceId !== settings.previousDeviceId) {
-			console.log(`[PixelDiscover.onDidReceiveSettings.${ev.action.id}]: Disconnecting previous device`);
+	// 	if (settings.previousDeviceId && settings.deviceId !== settings.previousDeviceId) {
+	// 		console.log(`[PixelDiscover.onDidReceiveSettings.${ev.action.id}]: Disconnecting previous device`);
 
-			await this.pixelManager.disconnect(settings.previousDeviceId, ev.action.id);
-		}
+	// 		await this.pixelManager.disconnect(settings.previousDeviceId, ev.action.id);
+	// 	}
 
-		if (settings.deviceId && settings.previousDeviceId !== settings.deviceId) {
-			console.log("Connect to device");
-			await this.connectToDevice(settings.deviceId, ev);
-		}
+	// 	if (settings.deviceId && settings.previousDeviceId !== settings.deviceId) {
+	// 		console.log("Connect to device");
+	// 		await this.connectToDevice(settings.deviceId, ev);
+	// 	}
 
-		await ev.action.setSettings({
-			...settings,
-			deviceId: settings.deviceId,
-			previousDeviceId: settings.deviceId,
-		});
+	// 	await ev.action.setSettings({
+	// 		...settings,
+	// 		deviceId: settings.deviceId,
+	// 		previousDeviceId: settings.deviceId,
+	// 	});
+	// }
+
+	public override async onWillAppear(ev: WillAppearEvent<JsonObject>): Promise<void> {
+		console.log(streamDeck.actions.getActionById(ev.action.id));
 	}
 
 	public override async onPropertyInspectorDidDisappear(ev: PropertyInspectorDidDisappearEvent): Promise<void> {
@@ -84,38 +77,6 @@ export class PixelDiscover<T extends DiscoverSettings> extends SingletonAction<T
 						})),
 					],
 				});
-			});
-		}
-	}
-
-	public override async onWillAppear(ev: WillAppearEvent<DiscoverSettings>): Promise<void> {
-		if (ev.payload.settings.deviceId) {
-			await this.connectToDevice(ev.payload.settings.deviceId, ev);
-		}
-	}
-
-	// public override async onWillDisappear(ev: WillDisappearEvent<DiscoverSettings>): Promise<void> {
-	// 	// console.log(await streamDeck.settings.)
-
-	// 	console.log("GONE");
-	// }
-
-	private async connectToDevice(
-		deviceId: string,
-		ev: DidReceiveSettingsEvent<DiscoverSettings> | WillAppearEvent<DiscoverSettings>,
-	) {
-		try {
-			console.log(`[PixelDiscover.connectToDevice]: Attempting to connect to ${deviceId}`);
-			const device = await this.pixelManager.connect(deviceId, ev.action.id);
-
-			console.log(`[PixelDiscover.connectToDevice.${ev.action.id}]: Connected to device`, device);
-		} catch (error) {
-			console.error(`[PixelDiscover.connectToDevice]: Failed to connect to device, clearing and alerting`, error);
-
-			await ev.action.showAlert();
-			await ev.action.setSettings({
-				...ev.payload.settings,
-				deviceId: undefined,
 			});
 		}
 	}
