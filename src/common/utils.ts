@@ -1,5 +1,5 @@
-import streamDeck, { DidReceiveGlobalSettingsEvent } from "@elgato/streamdeck"
-import { GlobalSettings } from "./types"
+import streamDeck from "@elgato/streamdeck"
+import { GlobalSettings, PixelConnectionState } from "./types"
 import { PixelManager } from "../pixelHelpers/PixelManagerV2";
 
 /**
@@ -15,58 +15,61 @@ export const startup = async (pixelManager: PixelManager) => {
 	if (!settings) {
 		settings = {
 			actions: {},
-			knownDevices: {}
+			connectedDevices: {}
 		}
 
 		await streamDeck.settings.setGlobalSettings<GlobalSettings>(settings);
+		await streamDeck.settings.getGlobalSettings();
 	}
 
-	const setConnectionStatus = async (id: string, connected: boolean) => {
+	const setConnectionStatus = async (id: string, connectionState: PixelConnectionState) => {
 		await streamDeck.settings.setGlobalSettings<GlobalSettings>({
 			...settings,
-			knownDevices: {
-				...settings.knownDevices,
+			connectedDevices: {
+				...settings.connectedDevices,
 				[id]: {
-					...settings.knownDevices[id],
-					connected,
+					...settings.connectedDevices[id],
+					connectionState,
 				}
 			}
-		})
+		});
+		await streamDeck.settings.getGlobalSettings();
 	}
 
 	await Promise.all(
-		Object.keys(settings.knownDevices).map(async (deviceId) => {
+		Object.keys(settings.connectedDevices).map(async (deviceId) => {
 			try {
 				console.log(`[startup]: Attempting to connect to ${deviceId}`);
 				
+				await setConnectionStatus(deviceId, PixelConnectionState.CONNECTING);
 				await pixelManager.connect(deviceId);
-				await setConnectionStatus(deviceId, true);
+				await setConnectionStatus(deviceId, PixelConnectionState.CONNECTED);
 
 				console.log(`[startup}]: Successfully connected to ${deviceId}`);
 			} catch (error) {
 				console.error(`[startup]: Failed to connect to device, setting as disconnected`, error);
                 
-				await setConnectionStatus(deviceId, false);
+				await setConnectionStatus(deviceId, PixelConnectionState.DISCONNECTED);
 			}
 		})
 	);
 
 	// We will finally register a settings listener to disconnect a device if all actions no longer reference it
-	streamDeck.settings.onDidReceiveGlobalSettings(async (event: DidReceiveGlobalSettingsEvent<GlobalSettings>) => {
-		const actionDevices = new Set<string>();
+	// streamDeck.settings.onDidReceiveGlobalSettings(async (event: DidReceiveGlobalSettingsEvent<GlobalSettings>) => {
+	// 	const actionDevices = new Set<string>();
 
-		Object.entries(event.settings.actions).forEach(([, { pixelId }]) => {
-			if (pixelId) {
-				actionDevices.add(pixelId);
-			}
-		});
+	// 	Object.entries(event.settings.actions).forEach(([, { pixelId }]) => {
+	// 		if (pixelId) {
+	// 			actionDevices.add(pixelId);
+	// 		}
+	// 	});
 
-		await Promise.all(
-			Object.keys(event.settings.knownDevices).map(async (deviceId) => {
-				if (!actionDevices.has(deviceId)) {
-					await pixelManager.disconnect(deviceId);
-				}
-			})
-		);
-	});
+	// 	await Promise.all(
+	// 		Object.keys(event.settings.knownDevices).map(async (deviceId) => {
+	// 			if (!actionDevices.has(deviceId)) {
+	// 				await pixelManager.disconnect(deviceId);
+	// 			}
+	// 		})
+	// 	);
+	// });
 }

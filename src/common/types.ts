@@ -1,4 +1,12 @@
 import { JsonObject } from "@elgato/streamdeck";
+import { Characteristic, Peripheral } from "@stoprocent/noble";
+
+export interface PixelBluetoothConfig {
+	id: string;
+	peripheral: Peripheral;
+	notify: Characteristic;
+	write: Characteristic;
+}
 
 export enum DCType {
 	standard = 0,
@@ -6,8 +14,10 @@ export enum DCType {
 	disadvantage = 2,
 }
 
-enum ActionType {
+export enum ActionType {
+	CONNECT = "CONNECT",
 	ROLL = "ROLL",
+	BATTERY = "BATTERY",
 	DC = "DC",
 	DC_CHANGE = "DC_CHANGE",
 }
@@ -17,10 +27,16 @@ enum CounterType {
 	MINUS = "MINUS",
 }
 
+export enum PixelConnectionState {
+	CONNECTED = 'CONNECTED',
+	DISCONNECTED = 'DISCONNECTED',
+	CONNECTING = 'CONNECTING',
+}
+
 export interface Pixel extends JsonObject {
 	id: string;
 	name: string;
-    connected: boolean;
+    connectionState: PixelConnectionState;
 }
 
 export interface ActionSettingsBase extends JsonObject {
@@ -29,9 +45,18 @@ export interface ActionSettingsBase extends JsonObject {
 	pixelId?: string;
 }
 
-export type BatteryActionSettings = ActionSettingsBase;
+export interface ConnectActionSettings extends JsonObject {
+	type: ActionType.CONNECT;
+	discoveredDevices: Pixel[];
+}
 
-export type RollActionSettings = ActionSettingsBase;
+export interface BatteryActionSettings extends JsonObject {
+	type: ActionType.BATTERY;
+}
+
+export interface RollActionSettings extends JsonObject {
+	type: ActionType.ROLL;
+}
 
 export interface DCActionSettings extends ActionSettingsBase {
 	type: ActionType.DC;
@@ -53,13 +78,13 @@ export interface DCChangeActionSettings extends ActionSettingsBase {
 	counterType: CounterType;
 }
 
-type ActionSettings = BatteryActionSettings | DCActionSettings | DCChangeActionSettings | RollActionSettings;
+type ActionSettings = BatteryActionSettings | ConnectActionSettings | DCActionSettings | DCChangeActionSettings | RollActionSettings;
 
 export interface GlobalSettings extends JsonObject {
     actions: {
         [actionId: string]: ActionSettings;
     }
-    knownDevices: {
+    connectedDevices: {
         [deviceId: string]: Pixel;
     }
 }

@@ -3,18 +3,190 @@
 	<head lang="en">
 		<title>Pixel Device Finder</title>
 		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<script src="./libs/sdpi-components.js"></script>
+		<link href="./styles/find-devices.css" rel="stylesheet" />
+		<!-- Bootstrap Icons -->
+		<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.13.1/font/bootstrap-icons.min.css" />
 	</head>
 	<body>
-		<sdpi-item id="device-container" label="Select">
-			<sdpi-radio
-				default="None selected"
-				setting="deviceId"
-				datasource="getDevices"
-				loading="Scanning for devices..."
-				hot-reload
-			>
-			</sdpi-radio>
-		</sdpi-item>
+		<sdpi-item class="devices-container" id="discoveredDevicesContainer" label="Discovered Devices"></sdpi-item>
+		<sdpi-item class="devices-container" id="connectedDevicesContainer" label="Connected Devices"></sdpi-item>
+
+
+		<script>
+			const connectDevice = async (deviceId) => {
+				const loading = document.createElement("i");
+				loading.className = 'spinner';
+				loading.id = `loading-${deviceId}`;
+
+				const connectBtn = document.getElementById(`connectButton-${deviceId}`);
+				connectBtn.replaceWith(loading);
+
+				await SDPIComponents.streamDeckClient.send('sendToPlugin', { 
+					event: 'connectDevice', 
+					deviceId 
+				});
+			}
+
+			const deleteDevice = async (deviceId) => {
+				await SDPIComponents.streamDeckClient.send('sendToPlugin', { 
+					event: 'deleteDevice', 
+					deviceId 
+				});
+			}
+
+			const reconnectDevice = async (deviceId) => {
+				await SDPIComponents.streamDeckClient.send('sendToPlugin', { 
+					event: 'reconnectDevice', 
+					deviceId 
+				});
+			}
+
+			const removeAllChildren = (parent) => {
+				while (parent.firstChild) {
+					parent.removeChild(parent.firstChild);
+				}
+			}
+
+			SDPIComponents.streamDeckClient.sendToPropertyInspector.subscribe(({ payload }) => {
+				console.log(`[UI]: Received event`, payload);
+
+				switch (payload.event) {
+					case "functionFailed": {
+						const loading = document.getElementById(`loading-${payload.deviceId}`);
+						loading.className = 'bi bi-exclamation-triangle-fill red'
+						loading.innerHTML = ' Error!'
+
+						setTimeout(() => {
+							const connectBtn = document.createElement("sdpi-button");
+							connectBtn.id = `connectButton-${payload.deviceId}`;
+							connectBtn.onclick = () => connectDevice(payload.deviceId);
+							connectBtn.innerHTML = 'Connect';
+
+							loading.replaceWith(connectBtn);
+						}, 5000);
+
+						break;
+					}
+					case "getDiscoveredDevices": {
+						const deviceContainer = document.getElementById("discoveredDevicesContainer");
+
+						removeAllChildren(deviceContainer);
+
+						payload.discoveredDevices.forEach(({ id, name }) => {
+							const div = document.createElement("div");
+							div.id = `device-container-${id}`;
+							div.className = "device-container";
+
+							const p = document.createElement("p");
+							p.textContent = `${name} (${id})`;
+
+							const connectBtn = document.createElement("sdpi-button");
+							connectBtn.id = `connectButton-${id}`;
+							connectBtn.onclick = () => connectDevice(id);
+							connectBtn.innerHTML = 'Connect';
+
+							div.appendChild(p);
+							div.appendChild(connectBtn);
+
+							deviceContainer.appendChild(div);
+						});
+
+						break;
+					}
+					case "getKnownDevices": {
+						const deviceContainer = document.getElementById("connectedDevicesContainer");
+
+						removeAllChildren(deviceContainer);
+
+						payload.knownDevices.forEach(({ id, name, connectionState }) => {
+							const div = document.createElement("div");
+							div.id = `device-container-${id}`;
+							div.className = "device-container";
+
+							const infoDiv = document.createElement("div");
+
+							const statusIcon = document.createElement("i");
+							statusIcon.id = `status-${id}`;
+							
+							switch(connectionState) {
+								case 'CONNECTED': 
+									statusIcon.className = 'bi bi-check-circle-fill green';
+									break;
+								case 'DISCONNECTED': 
+									statusIcon.className = 'bi bi-exclamation-triangle-fill red';
+									break;
+								case 'CONNECTING': 
+									statusIcon.className = 'spinner';
+									break;
+							}
+
+							const p = document.createElement("p");
+							p.textContent = `${name} (${id})`;
+
+							const actionDiv = document.createElement("div");
+
+							const deleteBtn = document.createElement("sdpi-button");
+							deleteBtn.id = `deleteButton-${id}`;
+							deleteBtn.onclick = () => deleteDevice(id);
+							deleteBtn.innerHTML = '<i class="bi bi-trash-fill"></i>';
+
+							const reconnectBtn = document.createElement("sdpi-button");
+							reconnectBtn.id = `reconnectButton-${id}`;
+							reconnectBtn.onclick = () => reconnectDevice(id);
+							reconnectBtn.innerHTML = '<i class="bi bi-arrow-clockwise"></i>';
+
+							div.appendChild(infoDiv);
+							div.appendChild(actionDiv);
+
+							infoDiv.appendChild(statusIcon);
+							infoDiv.appendChild(p);
+
+							actionDiv.appendChild(deleteBtn);
+							actionDiv.appendChild(reconnectBtn);
+
+							deviceContainer.appendChild(div);
+						});
+
+						break;
+					}
+				}
+			});
+
+			const pageLoad = async () => {
+				await SDPIComponents.streamDeckClient.send('getKnownDevices');
+			};
+
+			pageLoad();
+		</script>
+		<script
+			src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.8/dist/js/bootstrap.bundle.min.js"
+			integrity="sha384-FKyoEForCGlyvwx9Hj09JcYn3nv7wiPVlz7YYwJrWVcXK/BmnVDxM+D2scQbITxI"
+			crossorigin="anonymous"
+		></script>
 	</body>
 </html>
+
+
+			<!-- <div class="known-device-container">
+				<div class="spinner"></div>
+				<i class="bi bi-check-circle-fill green"></i>
+				<p>D20 (f123354435fg3)</p>
+				<sdpi-button class="reconnect-device" onclick="javascript:alert('Hello World')">
+					<i class="bi bi-arrow-clockwise"></i>
+				</sdpi-button>
+				<sdpi-button class="delete-device-button" onclick="javascript:alert('Hello World')">
+					<i class="bi bi-trash-fill"></i>
+				</sdpi-button>
+			</div>
+			<div class="known-device-container">
+				<i class="bi bi-exclamation-triangle-fill red"></i>
+				<p>D20 (f123354435fg3)</p>
+				<sdpi-button class="delete-device-button" onclick="javascript:alert('Hello World')">
+					<i class="bi bi-trash-fill"></i>
+				</sdpi-button>
+				<sdpi-button class="reconnect-device" onclick="javascript:alert('Hello World')">
+					<i class="bi bi-arrow-clockwise"></i>
+				</sdpi-button>
+			</div> -->

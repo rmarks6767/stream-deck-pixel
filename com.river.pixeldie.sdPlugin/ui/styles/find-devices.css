@@ -1,0 +1,45 @@
+.red {
+	color: #dc3545;
+}
+
+.green {
+	color: #198754;
+}
+
+.device-container {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+}
+
+.device-container > * {
+	display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.device-container > * > * {
+	margin-left: 10px;
+}
+
+.device-container > * > :first-child {
+	margin-left: 0;
+}
+
+.spinner {
+	border: 2px solid rgba(0, 0, 0, 0.1);
+	width: 10px;
+	height: 10px;
+	border-radius: 50%;
+	border-left-color: #09f; /* Color of the spinning part */
+	animation: spin 1s ease infinite; /* Animation name, duration, timing function, repetition */
+}
+
+@keyframes spin {
+	0% {
+		transform: rotate(0deg);
+	}
+	100% {
+		transform: rotate(360deg);
+	}
+}

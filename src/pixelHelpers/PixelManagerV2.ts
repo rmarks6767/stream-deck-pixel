@@ -1,11 +1,8 @@
-import noble, { Characteristic, Peripheral } from "@stoprocent/noble";
+import noble, { Peripheral } from "@stoprocent/noble";
+import { PixelBluetoothConfig } from "../common/types";
+// import { serializer } from "@systemic-games/pixels-web-connect/dist/types";
 
-export interface PixelBluetoothConfig {
-	id: string;
-	peripheral: Peripheral;
-	notify: Characteristic;
-	write: Characteristic;
-}
+const knownDevices = ["D20", "D12", "D8", "D6", "D4"];
 
 export class PixelManager {
 	private _devices: Map<string, PixelBluetoothConfig> = new Map();
@@ -29,6 +26,15 @@ export class PixelManager {
 			}
 
 			await notify.subscribeAsync();
+
+			notify.on('data', (data) => {
+				// const dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
+				
+				// const message = serializer.deserializeMessage(dataView);
+				// const messageType = serializer.getMessageType(message);
+				
+				console.log(`[device.${id}.messageRecieved]:`, data);
+			})
 
 			console.log(`[PixelManager.connect.${id}]: Subscribed to notify event`);
 
@@ -65,7 +71,39 @@ export class PixelManager {
 		this._devices.delete(id);
 	}
 
+	public async discoverDevices(callback: (id: string, name: string) => void) {
+		try {
+			await noble.waitForPoweredOnAsync(10000);
+			await noble.startScanningAsync();
+
+			noble.on("discover", async (peripheral: Peripheral) => {
+				if (knownDevices.includes(peripheral.advertisement.localName)) {
+					console.log("[discoverDevices]: Device Found", peripheral);
+
+					callback(peripheral.id, peripheral.advertisement.localName);
+				}
+			});
+		} catch(error) {
+			console.log(error);
+		}
+
+
+	}
+
 	public getDevice(id: string): PixelBluetoothConfig | undefined {
 		return this._devices.get(id);
+	}
+
+	public async stopDiscover() {
+		try {
+			if (noble.state === 'poweredOn') {
+				await noble.stopScanningAsync();
+				console.log(`[stopDisocover]: Discovery stopped succesfully`);
+			} else {
+				console.log(`[stopDisocover]: Discovery is not running, nothing to stop`);
+			}
+		} catch(error) {
+			console.error('[stopDisocover]: Stopping discovery failed!', error);
+		}
 	}
 }

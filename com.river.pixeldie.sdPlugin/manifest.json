@@ -4,6 +4,23 @@
     "Author": "River",
     "Actions": [
         {
+            "Name": "Connection Manager",
+            "UUID": "com.river.pixeldie.connectionmanager",
+            "Icon": "imgs/actions/counter/icon",
+            "Tooltip": "Allows management of connected Pixel devices.",
+            "PropertyInspectorPath": "ui/find-devices.html",
+            "UserTitleEnabled": false,
+            "Controllers": [
+                "Keypad"
+            ],
+            "States": [
+                {
+                    "Image": "imgs/actions/counter/key",
+                    "TitleAlignment": "middle"
+                }
+            ]
+        },
+        {
             "Name": "Difficulty Check",
             "UUID": "com.river.pixeldie.dc",
             "Icon": "imgs/actions/counter/icon",
@@ -13,7 +30,7 @@
             "Controllers": [
                 "Keypad"
             ],
-			"DisableAutomaticStates": true,
+            "DisableAutomaticStates": true,
             "States": [
                 {
                     "Image": "imgs/actions/standard",
@@ -29,7 +46,7 @@
                 }
             ]
         },
-		{
+        {
             "Name": "Difficulty Check Counter",
             "UUID": "com.river.pixeldie.dccounter",
             "Icon": "imgs/actions/counter/icon",
@@ -39,7 +56,7 @@
             "Controllers": [
                 "Keypad"
             ],
-			"DisableAutomaticStates": true,
+            "DisableAutomaticStates": true,
             "States": [
                 {
                     "Image": "imgs/actions/counter/key",
