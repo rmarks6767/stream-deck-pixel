@@ -1,0 +1,20 @@
+<!doctype html>
+<html>
+	<head lang="en">
+		<title>Pixel Select</title>
+		<meta charset="utf-8" />
+		<script src="./libs/sdpi-components.js"></script>
+	</head>
+	<body>
+		<sdpi-item id="device-container" label="Select">
+			<sdpi-radio
+				default="None selected"
+				setting="deviceId"
+				datasource="getDevices"
+				loading="Getting devices..."
+				hot-reload
+			>
+			</sdpi-radio>
+		</sdpi-item>
+	</body>
+</html>

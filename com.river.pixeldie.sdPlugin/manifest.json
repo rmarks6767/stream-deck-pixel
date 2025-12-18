@@ -21,6 +21,24 @@
             ]
         },
         {
+            "Name": "Roll",
+            "UUID": "com.river.pixeldie.roll",
+            "Icon": "imgs/actions/counter/icon",
+            "Tooltip": "Displays the rolling status of the connected Pixel Die.",
+            "PropertyInspectorPath": "ui/device-dropdown.html",
+            "UserTitleEnabled": false,
+            "Controllers": [
+                "Keypad"
+            ],
+            "States": [
+                {
+                    "Image": "imgs/actions/counter/key",
+                    "TitleAlignment": "middle"
+                }
+            ]
+        },
+
+        {
             "Name": "Difficulty Check",
             "UUID": "com.river.pixeldie.dc",
             "Icon": "imgs/actions/counter/icon",
@@ -84,23 +102,6 @@
                     "TitleAlignment": "middle"
                 }
             ]
-        },
-        {
-            "Name": "Roll",
-            "UUID": "com.river.pixeldie.roll",
-            "Icon": "imgs/actions/counter/icon",
-            "Tooltip": "Displays the rolling status of the connected Pixel Die.",
-            "PropertyInspectorPath": "ui/find-devices.html",
-            "UserTitleEnabled": false,
-            "Controllers": [
-                "Keypad"
-            ],
-            "States": [
-                {
-                    "Image": "imgs/actions/counter/key",
-                    "TitleAlignment": "middle"
-                }
-            ]
         }
     ],
     "Category": "pixeldie",
@@ -110,7 +111,7 @@
     "Icon": "imgs/plugin/marketplace",
     "SDKVersion": 2,
     "Software": {
-        "MinimumVersion": "6.5"
+        "MinimumVersion": "7.1"
     },
     "OS": [
         {

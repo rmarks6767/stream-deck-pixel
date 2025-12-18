@@ -44,6 +44,8 @@ export class Player {
 	}
 
 	public play(what: string, options: PlayMethodOptions = {}): Promise<void> {
+		console.log('we are here')
+		
 		return new Promise((resolve, reject) => {
 			const args = Array.isArray(options[this.#opts.player])
 				? options[this.#opts.player]!.concat(what).map(String)

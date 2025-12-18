@@ -56,7 +56,7 @@ export class PixelDiscover extends SingletonAction {
 			await this.pixelManager.startDiscover(ev.action.id, async ({ connectedDevices, discoveredDevices }) => {
 				console.log(connectedDevices);
 
-				await streamDeck.ui.current?.sendToPropertyInspector({
+				await streamDeck.ui.sendToPropertyInspector({
 					event: "getDevices",
 					items: [
 						{

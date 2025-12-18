@@ -2,16 +2,20 @@ import streamDeck, {
 	action,
 	DidReceiveGlobalSettingsEvent,
 	DidReceiveSettingsEvent,
-	JsonObject,
 	PropertyInspectorDidAppearEvent,
 	PropertyInspectorDidDisappearEvent,
 	SendToPluginEvent,
 	SingletonAction,
 	WillAppearEvent,
 } from "@elgato/streamdeck";
+import { JsonObject } from "@elgato/utils";
 
-import { ActionType, ConnectActionSettings, GlobalSettings, Pixel, PixelConnectionState } from "../common/types";
+import { GlobalSettings, Pixel, PixelConnectionState } from "../common/types";
 import { PixelManager } from "../pixelHelpers/PixelManagerV2";
+
+export interface ConnectActionSettings extends JsonObject {
+	discoveredDevices: Pixel[];
+}
 
 interface PluginEvent extends JsonObject {
 	event: "connectDevice" | "deleteDevice" | "reconnectDevice";
@@ -35,7 +39,8 @@ export class ConnectAction extends SingletonAction<ConnectActionSettings> {
 	}
 
 	public override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<ConnectActionSettings>): Promise<void> {
-		await streamDeck.ui.current?.sendToPropertyInspector({
+		console.log(`[ConnectAction.onDidReceiveSettings]: `, ev);
+		await streamDeck.ui.sendToPropertyInspector({
 			event: "getDiscoveredDevices",
 			discoveredDevices: ev.payload.settings.discoveredDevices,
 		});
@@ -53,7 +58,7 @@ export class ConnectAction extends SingletonAction<ConnectActionSettings> {
 			async (event: DidReceiveGlobalSettingsEvent<GlobalSettings>) => {
 				const { connectedDevices } = event.settings;
 
-				await streamDeck.ui.current?.sendToPropertyInspector({
+				await streamDeck.ui.sendToPropertyInspector({
 					event: "getKnownDevices",
 					knownDevices: Object.values(connectedDevices),
 				});
@@ -61,16 +66,18 @@ export class ConnectAction extends SingletonAction<ConnectActionSettings> {
 		);
 
 		await this._pixelManager.discoverDevices(async (id, name) => {
-			const settings = await ev.action.getSettings();
+			const localSettings = await ev.action.getSettings();
+			const { connectedDevices } = await streamDeck.settings.getGlobalSettings<GlobalSettings>();
 
-			if (settings.discoveredDevices.find((device: Pixel) => device.id === id)) {
-				console.log("[ConnectAction.discoverDevices]: Device has already been sent to the UI");
+
+			if (localSettings.discoveredDevices.find((device: Pixel) => device.id === id) || connectedDevices[id]) {
+				console.log("[ConnectAction.discoverDevices]: Device has already been sent to the UI or is connected");
 
 				return;
 			}
 
 			const newDiscoveredDevices = [
-				...settings.discoveredDevices,
+				...localSettings.discoveredDevices,
 				{
 					id,
 					name,
@@ -79,17 +86,17 @@ export class ConnectAction extends SingletonAction<ConnectActionSettings> {
 			];
 
 			await ev.action.setSettings({
-				...settings,
+				...localSettings,
 				discoveredDevices: newDiscoveredDevices,
 			});
 			await ev.action.getSettings();
 		});
 
-		await streamDeck.ui.current?.sendToPropertyInspector({
+		await streamDeck.ui.sendToPropertyInspector({
 			event: "getKnownDevices",
 			knownDevices: Object.values(connectedDevices),
 		});
-		await streamDeck.ui.current?.sendToPropertyInspector({
+		await streamDeck.ui.sendToPropertyInspector({
 			event: "getDiscoveredDevices",
 			discoveredDevices,
 		});
@@ -98,6 +105,7 @@ export class ConnectAction extends SingletonAction<ConnectActionSettings> {
 	public override async onPropertyInspectorDidDisappear(
 		ev: PropertyInspectorDidDisappearEvent<ConnectActionSettings>,
 	): Promise<void> {
+		console.log(`[ConnectAction.onPropertyInspectorDidDisappear]: Stopping discover`, ev);
 		const settings = await ev.action.getSettings();
 
 		await ev.action.setSettings({
@@ -115,36 +123,31 @@ export class ConnectAction extends SingletonAction<ConnectActionSettings> {
 		console.log(`[ConnectAction.onSendToPlugin]: `, ev);
 
 		switch (ev.payload.event) {
-			case "connectDevice": {
+			case "connectDevice":
 				await this.connectToDevice(ev);
 				break;
-			}
-
-			case "deleteDevice": {
-				console.log("Delete device now");
-
+			case "deleteDevice":
 				await this.deleteDevice(ev);
 				break;
-			}
-			case "reconnectDevice": {
-				console.log("Reconnect to device now");
+			case "reconnectDevice":
 				await this.reconnectToDevice(ev);
-
 				break;
-			}
 		}
 	}
 
 	public override async onWillAppear(ev: WillAppearEvent<ConnectActionSettings>): Promise<void> {
+		console.log(`[ConnectAction.onWillAppear]: `, ev);
+		
 		if (!ev.payload.settings.type) {
 			await ev.action.setSettings<ConnectActionSettings>({
-				type: ActionType.CONNECT,
 				discoveredDevices: [],
 			});
 		}
 	}
 
 	private async connectToDevice(ev: SendToPluginEvent<PluginEvent, ConnectActionSettings>) {
+		console.log(`[ConnectAction.connectToDevice]: `, ev);
+		
 		const { deviceId } = ev.payload;
 
 		const localSettings = await ev.action.getSettings();
@@ -152,7 +155,7 @@ export class ConnectAction extends SingletonAction<ConnectActionSettings> {
 
 		// If we requested a device that didn't exist in the array (shouldn't happen) we error out
 		if (!device) {
-			await streamDeck.ui.current?.sendToPropertyInspector({
+			await streamDeck.ui.sendToPropertyInspector({
 				event: "functionFailed",
 				deviceId,
 			});
@@ -215,6 +218,8 @@ export class ConnectAction extends SingletonAction<ConnectActionSettings> {
 	}
 
 	private async deleteDevice(ev: SendToPluginEvent<PluginEvent, ConnectActionSettings>) {
+		console.log(`[ConnectAction.deleteDevice]: `, ev);
+		
 		const { deviceId } = ev.payload;
 
 		const globalSettings = await streamDeck.settings.getGlobalSettings<GlobalSettings>();
@@ -236,6 +241,8 @@ export class ConnectAction extends SingletonAction<ConnectActionSettings> {
 	}
 
 	private async reconnectToDevice(ev: SendToPluginEvent<PluginEvent, ConnectActionSettings>) {
+		console.log(`[ConnectAction.reconnectToDevice]: `, ev);
+
 		const { deviceId } = ev.payload;
 
 		// Add the device to global settings and set it to connecting
@@ -243,7 +250,7 @@ export class ConnectAction extends SingletonAction<ConnectActionSettings> {
 		const device = globalSettings.connectedDevices[deviceId];
 
 		if (!device) {
-			await streamDeck.ui.current?.sendToPropertyInspector({
+			await streamDeck.ui.sendToPropertyInspector({
 				event: "functionFailed",
 				deviceId,
 			});
