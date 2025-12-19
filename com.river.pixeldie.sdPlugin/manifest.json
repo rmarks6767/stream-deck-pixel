@@ -65,11 +65,11 @@
             ]
         },
         {
-            "Name": "Difficulty Check Counter",
-            "UUID": "com.river.pixeldie.dccounter",
+            "Name": "Difficulty Check Changer",
+            "UUID": "com.river.pixeldie.dcchange",
             "Icon": "imgs/actions/counter/icon",
             "Tooltip": "Allows increasing or decreasing of DC",
-            "PropertyInspectorPath": "ui/dc-counter-configuration.html",
+            "PropertyInspectorPath": "ui/dc-change-configuration.html",
             "UserTitleEnabled": false,
             "Controllers": [
                 "Keypad"

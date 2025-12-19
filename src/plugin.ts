@@ -8,6 +8,7 @@ import { startup } from "./common/utils";
 import { ConnectAction } from "./actions/ConnectAction";
 import { RollAction } from "./actions/RollAction";
 import { DCAction } from "./actions/DCAction";
+import { DCChangeAction } from "./actions/DCChangeAction";
 
 // We can enable "trace" logging so that all messages between the Stream Deck, and the plugin are recorded. When storing sensitive information
 streamDeck.logger.setLevel('error');
@@ -19,7 +20,7 @@ const pixelManagerV2 = new PixelManagerV2();
 streamDeck.actions.registerAction(new ConnectAction(pixelManagerV2));
 streamDeck.actions.registerAction(new RollAction(pixelManagerV2));
 streamDeck.actions.registerAction(new DCAction(pixelManagerV2));
-// streamDeck.actions.registerAction(new PixelDCCounter(pixelManager));
+streamDeck.actions.registerAction(new DCChangeAction(pixelManagerV2));
 
 // Finally, connect to the Stream Deck.
 streamDeck.connect().then(() => startup(pixelManagerV2));

@@ -69,7 +69,26 @@ export class DCAction extends DisplayActionBase<DCSettings> {
 	}
 
 	public override async onWillAppear(ev: WillAppearEvent<DCSettings>): Promise<void> {
-		const { difficulty = 10, type = DCType.standard } = ev.payload.settings;
+		if (!ev.payload.settings.deviceId) {
+			return;
+		}
+
+		const { connectedDevices } = await streamDeck.settings.getGlobalSettings<GlobalSettings>();
+		const device = connectedDevices?.[ev.payload.settings.deviceId];
+		const { difficulty = 10, type = DCType.standard } = device.dcConfig || {};
+
+		streamDeck.settings.onDidReceiveGlobalSettings<GlobalSettings>(async (gev) => {
+			const updatedDevice = gev.settings.connectedDevices?.[ev.payload.settings.deviceId || ""];
+			if (updatedDevice) {
+				const { difficulty = 10, type = DCType.standard } = updatedDevice.dcConfig || {};
+				
+				console.log('New Difficulty:', difficulty, 'Type:', type);
+
+				this.setImage(ev, type);
+				ev.action.setTitle(this.formatTitle(difficulty, type));
+				await this.registerListener(ev);
+			}
+		})
 
 		await this.setImage(ev, type);
 		await ev.action.setTitle(this.formatTitle(difficulty, type));
@@ -133,22 +152,22 @@ export class DCAction extends DisplayActionBase<DCSettings> {
                 
 					await ev.action.setTitle(this.formatTitle(difficulty, type, roll1, roll2));
                 
-					// switch (type) {
-					// 	case DCType.advantage: {
-					// 		if ((roll1 === 20 || roll2 === 20)) {
-					// 			await ev.action.setTitle(this.formatTitle(difficulty, type, 20, 20));
-					// 			rolls = [];
-					// 		}
-					// 		break;
-					// 	}
-					// 	case DCType.disadvantage: {
-					// 		if ((roll1 === 1 || roll2 === 1)) {
-					// 			await ev.action.setTitle(this.formatTitle(difficulty, type, 1, 1));
-					// 			rolls = [];
-					// 		}
-					// 		break;
-					// 	}
-					// }
+					switch (type) {
+						case DCType.advantage: {
+							if ((roll1 === 20 || roll2 === 20)) {
+								await ev.action.setTitle(this.formatTitle(difficulty, type, 20, 20));
+								rolls = [];
+							}
+							break;
+						}
+						case DCType.disadvantage: {
+							if ((roll1 === 1 || roll2 === 1)) {
+								await ev.action.setTitle(this.formatTitle(difficulty, type, 1, 1));
+								rolls = [];
+							}
+							break;
+						}
+					}
 				} else if (event.state === 3) {
 					if (rolls.length === 2 || type === DCType.standard) {
 						rolls = [];

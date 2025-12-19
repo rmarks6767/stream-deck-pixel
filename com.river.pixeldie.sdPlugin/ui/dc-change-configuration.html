@@ -6,20 +6,20 @@
 		<script src="./libs/sdpi-components.js"></script>
 	</head>
 	<body>
-		<sdpi-item id="device-container" label="Select">
+		<sdpi-item id="device-container" label="Select Device">
 			<sdpi-radio
 				default="None selected"
 				setting="deviceId"
 				datasource="getDevices"
-				loading="Scanning for devices..."
+				loading="Getting devices..."
 				hot-reload
 			>
 			</sdpi-radio>
 		</sdpi-item>
 		<sdpi-item id="counter-container" label="Counter Type">
 			<sdpi-radio setting="type" columns="2">
-				<option value="0">Plus</option>
-				<option value="1">Minus</option>
+				<option value="plus">Plus</option>
+				<option value="minus">Minus</option>
 			</sdpi-radio>
 		</sdpi-item>
 	</body>

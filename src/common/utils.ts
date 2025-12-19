@@ -72,8 +72,6 @@ export const registerDCListener = async (pixelManager: PixelManager, device: Pix
 		actionId: "global-dc-listener",
 		type: "rollState",
 		listener: async ({ type, faceIndex, state }) => {
-			console.log(`[registerDCListener]: Received roll event from device ${device.id} - type: ${type}, faceIndex: ${faceIndex}, state: ${state}`, dcConfig);
-
 			if (state === 1) {
 				if (rolls.length === 2 || type === DCType.standard) {
 					rolls = [];
@@ -82,7 +80,7 @@ export const registerDCListener = async (pixelManager: PixelManager, device: Pix
 				rolls.push(faceIndex + 1);
 				const [roll1, roll2] = rolls;
 
-				switch (type) {
+				switch (dcConfig.type) {
 					case DCType.standard: {
 						if (roll1 === 20 && dcConfig.nat20Audio) {
 							await soundPlayer.play(dcConfig.nat20Audio);
