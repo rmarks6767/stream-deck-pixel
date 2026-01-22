@@ -1,7 +1,7 @@
 import streamDeck, { SendToPluginEvent, SingletonAction } from "@elgato/streamdeck";
 import { JsonObject } from "@elgato/utils";
-import { GlobalSettings } from "../common/types";
-import { PixelManager } from "../pixelHelpers/PixelManagerV2";
+import { PixelManager } from "../pixelHelpers/PixelManager";
+import { GlobalSettingsController } from "../common/globalSettingsController";
 
 interface PluginEvent extends JsonObject {
 	event: "getDevices";
@@ -21,10 +21,8 @@ export class DisplayActionBase<T extends JsonObject = JsonObject> extends Single
 	}
 
 	public override async onSendToPlugin(ev: SendToPluginEvent<PluginEvent, DisplayActionBaseSettings>): Promise<void> {
-		console.log(`[onSendToPlugin.event]: `, ev);
-
 		if (ev.payload.event === "getDevices") {
-			const { connectedDevices } = await streamDeck.settings.getGlobalSettings<GlobalSettings>();
+			const { connectedDevices } = await GlobalSettingsController.get();
 
 			const items = Object.values(connectedDevices).map((device) => ({
 				label: `${device.name} (${device.id})`,

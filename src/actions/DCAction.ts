@@ -1,8 +1,9 @@
-import streamDeck, { action, DidReceiveSettingsEvent, KeyDownEvent, WillAppearEvent, WillDisappearEvent } from "@elgato/streamdeck";
-import { PixelManager } from "../pixelHelpers/PixelManagerV2";
+import { action, DidReceiveSettingsEvent, KeyDownEvent, WillAppearEvent, WillDisappearEvent } from "@elgato/streamdeck";
+import { PixelManager } from "../pixelHelpers/PixelManager";
 import { DisplayActionBase, DisplayActionBaseSettings } from "./DisplayActionBase";
-import { DCConfig, DCType, GlobalSettings } from "../common/types";
+import { DCConfig, DCType } from "../common/types";
 import { registerDCListener } from "../common/utils";
+import { GlobalSettingsController } from "../common/globalSettingsController";
 
 type DCSettings = DCConfig & DisplayActionBaseSettings;
 
@@ -24,7 +25,7 @@ export class DCAction extends DisplayActionBase<DCSettings> {
 		// 2. Update global settings to set the dc configuration for the selected device
 
 		if(settings.deviceId) {
-			const { connectedDevices } = await streamDeck.settings.getGlobalSettings<GlobalSettings>();
+			const { connectedDevices } = await GlobalSettingsController.get();
 
 			const newDevice = {
 				...connectedDevices?.[settings.deviceId],
@@ -34,7 +35,7 @@ export class DCAction extends DisplayActionBase<DCSettings> {
 				}
 			};
 
-			await streamDeck.settings.setGlobalSettings<GlobalSettings>({
+			await GlobalSettingsController.set({
 				connectedDevices: {
 					...connectedDevices,
 					[settings.deviceId]: newDevice
@@ -73,32 +74,30 @@ export class DCAction extends DisplayActionBase<DCSettings> {
 			return;
 		}
 
-		const { connectedDevices } = await streamDeck.settings.getGlobalSettings<GlobalSettings>();
+		const { connectedDevices } = await GlobalSettingsController.get();
 		const device = connectedDevices?.[ev.payload.settings.deviceId];
-		const { difficulty = 10, type = DCType.standard } = device.dcConfig || {};
+		const { difficulty, type} = device.dcConfig;
 
-		streamDeck.settings.onDidReceiveGlobalSettings<GlobalSettings>(async (gev) => {
-			const updatedDevice = gev.settings.connectedDevices?.[ev.payload.settings.deviceId || ""];
+		GlobalSettingsController.addListener(ev.action.id, async (settings) => {
+			const updatedDevice = settings.connectedDevices[ev.payload.settings.deviceId];
 			if (updatedDevice) {
-				const { difficulty = 10, type = DCType.standard } = updatedDevice.dcConfig || {};
+				const { difficulty, type } = updatedDevice.dcConfig;
 				
-				console.log('New Difficulty:', difficulty, 'Type:', type);
-
 				this.setImage(ev, type);
 				ev.action.setTitle(this.formatTitle(difficulty, type));
 				await this.registerListener(ev);
 			}
 		})
 
+
 		await this.setImage(ev, type);
 		await ev.action.setTitle(this.formatTitle(difficulty, type));
 		await this.registerListener(ev);
-
-		console.log(`[DCAction.${ev.action.id}] onWillAppear for device ${ev.payload.settings.deviceId}`);
 	}
 
 	public override async onWillDisappear(ev: WillDisappearEvent<DCSettings>): Promise<void> {
 		await this._pixelManager.removeListener(ev.payload.settings.deviceId, ev.action.id);
+		GlobalSettingsController.removeListener(ev.action.id);
 	}
 
 	private formatRoll(roll?: number | string) {
@@ -124,11 +123,7 @@ export class DCAction extends DisplayActionBase<DCSettings> {
 	private async registerListener(
 		ev: DidReceiveSettingsEvent<DCSettings> | KeyDownEvent<DCSettings> | WillAppearEvent<DCSettings>,
 	) {
-		console.log(`[PixelRoll.${ev.action.id}] Registering listener for ${ev.payload.settings.deviceId}`);
-
 		if (!ev.payload.settings.deviceId) {
-			console.log(`[PixelRoll.${ev.action.id}] No device selected, skipping listener registration`);
-
 			return;
 		}
 

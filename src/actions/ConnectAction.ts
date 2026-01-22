@@ -1,6 +1,5 @@
 import streamDeck, {
 	action,
-	DidReceiveGlobalSettingsEvent,
 	DidReceiveSettingsEvent,
 	PropertyInspectorDidAppearEvent,
 	PropertyInspectorDidDisappearEvent,
@@ -9,9 +8,10 @@ import streamDeck, {
 	WillAppearEvent,
 } from "@elgato/streamdeck";
 import { JsonObject } from "@elgato/utils";
-
-import { GlobalSettings, Pixel, PixelConnectionState } from "../common/types";
-import { PixelManager } from "../pixelHelpers/PixelManagerV2";
+import { DCType, GlobalSettings, Pixel, PixelConnectionState } from "../common/types";
+import { PixelManager } from "../pixelHelpers/PixelManager";
+import { GlobalSettingsController } from "../common/globalSettingsController";
+import { setConnectionStatus, wait } from "../common/utils";
 
 export interface ConnectActionSettings extends JsonObject {
 	discoveredDevices: Pixel[];
@@ -22,14 +22,8 @@ interface PluginEvent extends JsonObject {
 	deviceId: string;
 }
 
-export interface IDisposable {
-	[Symbol.dispose](): void;
-	dispose(): void;
-}
-
 @action({ UUID: "com.river.pixeldie.connectionmanager" })
 export class ConnectAction extends SingletonAction<ConnectActionSettings> {
-	protected _globalListener?: IDisposable;
 	protected _pixelManager: PixelManager;
 
 	constructor(pixelManager: PixelManager) {
@@ -39,7 +33,6 @@ export class ConnectAction extends SingletonAction<ConnectActionSettings> {
 	}
 
 	public override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<ConnectActionSettings>): Promise<void> {
-		console.log(`[ConnectAction.onDidReceiveSettings]: `, ev);
 		await streamDeck.ui.sendToPropertyInspector({
 			event: "getDiscoveredDevices",
 			discoveredDevices: ev.payload.settings.discoveredDevices,
@@ -49,39 +42,35 @@ export class ConnectAction extends SingletonAction<ConnectActionSettings> {
 	public override async onPropertyInspectorDidAppear(
 		ev: PropertyInspectorDidAppearEvent<ConnectActionSettings>,
 	): Promise<void> {
-		console.log(`[ConnectAction.onSendToPlugin]: Starting discover`, ev);
-
-		const { connectedDevices } = await streamDeck.settings.getGlobalSettings<GlobalSettings>();
+		const { connectedDevices } = await GlobalSettingsController.get();
 		const { discoveredDevices } = await ev.action.getSettings();
 
-		this._globalListener = streamDeck.settings.onDidReceiveGlobalSettings<GlobalSettings>(
-			async (event: DidReceiveGlobalSettingsEvent<GlobalSettings>) => {
-				const { connectedDevices } = event.settings;
-
-				await streamDeck.ui.sendToPropertyInspector({
-					event: "getKnownDevices",
-					knownDevices: Object.values(connectedDevices),
-				});
-			},
-		);
+		GlobalSettingsController.addListener(ev.action.id, async ({ connectedDevices }) => {
+			await streamDeck.ui.sendToPropertyInspector({
+				event: "getKnownDevices",
+				knownDevices: Object.values(connectedDevices),
+			});
+		})
 
 		await this._pixelManager.discoverDevices(async (id, name) => {
 			const localSettings = await ev.action.getSettings();
-			const { connectedDevices } = await streamDeck.settings.getGlobalSettings<GlobalSettings>();
+			const { connectedDevices } = await GlobalSettingsController.get();
 
 
 			if (localSettings.discoveredDevices.find((device: Pixel) => device.id === id) || connectedDevices[id]) {
-				console.log("[ConnectAction.discoverDevices]: Device has already been sent to the UI or is connected");
-
 				return;
 			}
 
-			const newDiscoveredDevices = [
+			const newDiscoveredDevices: Pixel[] = [
 				...localSettings.discoveredDevices,
 				{
 					id,
 					name,
 					connectionState: PixelConnectionState.DISCONNECTED,
+					dcConfig: {
+						type: DCType.standard,
+						difficulty: 10,
+					}
 				},
 			];
 
@@ -105,7 +94,6 @@ export class ConnectAction extends SingletonAction<ConnectActionSettings> {
 	public override async onPropertyInspectorDidDisappear(
 		ev: PropertyInspectorDidDisappearEvent<ConnectActionSettings>,
 	): Promise<void> {
-		console.log(`[ConnectAction.onPropertyInspectorDidDisappear]: Stopping discover`, ev);
 		const settings = await ev.action.getSettings();
 
 		await ev.action.setSettings({
@@ -113,31 +101,24 @@ export class ConnectAction extends SingletonAction<ConnectActionSettings> {
 			discoveredDevices: [],
 		});
 		await this._pixelManager.stopDiscover();
-
-		if (this._globalListener) {
-			await Promise.resolve(this._globalListener.dispose());
-		}
+		GlobalSettingsController.removeListener(ev.action.id);
 	}
 
 	public override async onSendToPlugin(ev: SendToPluginEvent<PluginEvent, ConnectActionSettings>): Promise<void> {
-		console.log(`[ConnectAction.onSendToPlugin]: `, ev);
-
 		switch (ev.payload.event) {
 			case "connectDevice":
 				await this.connectToDevice(ev);
 				break;
 			case "deleteDevice":
-				await this.deleteDevice(ev);
+				await this.deleteDevice(ev.payload.deviceId);
 				break;
 			case "reconnectDevice":
-				await this.reconnectToDevice(ev);
+				await this.reconnectToDevice(ev.payload.deviceId);
 				break;
 		}
 	}
 
 	public override async onWillAppear(ev: WillAppearEvent<ConnectActionSettings>): Promise<void> {
-		console.log(`[ConnectAction.onWillAppear]: `, ev);
-		
 		if (!ev.payload.settings.type) {
 			await ev.action.setSettings<ConnectActionSettings>({
 				discoveredDevices: [],
@@ -145,9 +126,29 @@ export class ConnectAction extends SingletonAction<ConnectActionSettings> {
 		}
 	}
 
+	private async connect(device: Pixel, retry = 0) {
+		await setConnectionStatus(device, PixelConnectionState.CONNECTING)
+
+		try {
+			await this._pixelManager.connect(device.id);
+			await setConnectionStatus(device, PixelConnectionState.CONNECTED)
+		} catch (error) {
+			if (retry < 3) {
+				await wait(retry * 1000);
+				await this.connect(device, retry + 1);
+				return;
+			}
+
+			streamDeck.logger.error({
+				message: `Failed to reconnect to device: ${device.id}`, 
+				error
+			});
+
+			await setConnectionStatus(device, PixelConnectionState.DISCONNECTED)
+		}
+	}
+
 	private async connectToDevice(ev: SendToPluginEvent<PluginEvent, ConnectActionSettings>) {
-		console.log(`[ConnectAction.connectToDevice]: `, ev);
-		
 		const { deviceId } = ev.payload;
 
 		const localSettings = await ev.action.getSettings();
@@ -169,60 +170,11 @@ export class ConnectAction extends SingletonAction<ConnectActionSettings> {
 			discoveredDevices: localSettings.discoveredDevices.filter(({ id }) => id !== deviceId),
 		})
 		await ev.action.getSettings();
-
-		// Add the device to global settings and set it to connecting
-		const globalSettings = await streamDeck.settings.getGlobalSettings<GlobalSettings>();
-		const newConnectedDevices = {
-			...globalSettings.connectedDevices,
-			[deviceId]: {
-				...device,
-				connectionState: PixelConnectionState.CONNECTING,
-			},
-		};
-		await streamDeck.settings.setGlobalSettings<GlobalSettings>({
-			...globalSettings,
-			connectedDevices: newConnectedDevices,
-		});
-		await streamDeck.settings.getGlobalSettings<GlobalSettings>();
-
-		// Attempt to connect to this pixel
-		try {
-			await this._pixelManager.connect(ev.payload.deviceId);
-			await streamDeck.settings.setGlobalSettings<GlobalSettings>({
-				...globalSettings,
-				connectedDevices: {
-					...newConnectedDevices,
-					[deviceId]: {
-						...device,
-						connectionState: PixelConnectionState.CONNECTED,
-					},
-				},
-			});
-			await streamDeck.settings.getGlobalSettings<GlobalSettings>();
-		} catch (error) {
-			// If we error, we will set it to disconnect
-			console.log("Something went wrong when connecting to the pixel", error);
-
-			await streamDeck.settings.setGlobalSettings<GlobalSettings>({
-				...globalSettings,
-				connectedDevices: {
-					...newConnectedDevices,
-					[deviceId]: {
-						...device,
-						connectionState: PixelConnectionState.DISCONNECTED,
-					},
-				},
-			});
-			await streamDeck.settings.getGlobalSettings<GlobalSettings>();
-		}
+		await this.connect(device);
 	}
 
-	private async deleteDevice(ev: SendToPluginEvent<PluginEvent, ConnectActionSettings>) {
-		console.log(`[ConnectAction.deleteDevice]: `, ev);
-		
-		const { deviceId } = ev.payload;
-
-		const globalSettings = await streamDeck.settings.getGlobalSettings<GlobalSettings>();
+	private async deleteDevice(deviceId: string) {
+		const globalSettings = await GlobalSettingsController.get();
 
 		await this._pixelManager.disconnect(deviceId);
 
@@ -233,20 +185,15 @@ export class ConnectAction extends SingletonAction<ConnectActionSettings> {
 			}
 		});
 
-		await streamDeck.settings.setGlobalSettings<GlobalSettings>({
+		await GlobalSettingsController.set({
 			...globalSettings,
 			connectedDevices: newConnectedDevices,
 		});
-		await streamDeck.settings.getGlobalSettings<GlobalSettings>();
 	}
 
-	private async reconnectToDevice(ev: SendToPluginEvent<PluginEvent, ConnectActionSettings>) {
-		console.log(`[ConnectAction.reconnectToDevice]: `, ev);
-
-		const { deviceId } = ev.payload;
-
+	private async reconnectToDevice(deviceId: string) {
 		// Add the device to global settings and set it to connecting
-		const globalSettings = await streamDeck.settings.getGlobalSettings<GlobalSettings>();
+		const globalSettings = await GlobalSettingsController.get();
 		const device = globalSettings.connectedDevices[deviceId];
 
 		if (!device) {
@@ -258,47 +205,7 @@ export class ConnectAction extends SingletonAction<ConnectActionSettings> {
 			return;
 		}
 
-		await streamDeck.settings.setGlobalSettings<GlobalSettings>({
-			...globalSettings,
-			connectedDevices: {
-				...globalSettings.connectedDevices,
-				[deviceId]: {
-					...globalSettings.connectedDevices[deviceId],
-					connectionState: PixelConnectionState.CONNECTING,
-				},
-			},
-		});
-		await streamDeck.settings.getGlobalSettings<GlobalSettings>();
-
-		try {
-			await this._pixelManager.disconnect(ev.payload.deviceId);
-			await this._pixelManager.connect(ev.payload.deviceId);
-			await streamDeck.settings.setGlobalSettings<GlobalSettings>({
-				...globalSettings,
-				connectedDevices: {
-					...globalSettings.connectedDevices,
-					[deviceId]: {
-						...globalSettings.connectedDevices[deviceId],
-						connectionState: PixelConnectionState.CONNECTED,
-					},
-				},
-			});
-			await streamDeck.settings.getGlobalSettings<GlobalSettings>();
-		} catch (error) {
-			// If we error, we will set it to disconnect
-			console.log("Something went wrong when connecting to the pixel", error);
-
-			await streamDeck.settings.setGlobalSettings<GlobalSettings>({
-				...globalSettings,
-				connectedDevices: {
-					...globalSettings.connectedDevices,
-					[deviceId]: {
-						...globalSettings.connectedDevices[deviceId],
-						connectionState: PixelConnectionState.DISCONNECTED,
-					},
-				},
-			});
-			await streamDeck.settings.getGlobalSettings<GlobalSettings>();
-		}
+		await this._pixelManager.disconnect(deviceId);
+		await this.connect(device);
 	}
 }

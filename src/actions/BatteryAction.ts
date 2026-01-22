@@ -2,8 +2,8 @@ import { action, DidReceiveSettingsEvent, WillAppearEvent, WillDisappearEvent } 
 import { PixelManager } from "../pixelHelpers/PixelManager";
 import { DisplayActionBase, DisplayActionBaseSettings } from "./DisplayActionBase";
 
-@action({ UUID: "com.river.pixeldie.roll" })
-export class RollAction extends DisplayActionBase {
+@action({ UUID: "com.river.pixeldie.battery" })
+export class BatteryAction extends DisplayActionBase {
 	constructor(pixelManager: PixelManager) {
 		super(pixelManager);
 	}
@@ -29,9 +29,9 @@ export class RollAction extends DisplayActionBase {
 
 		await this._pixelManager.addListener(ev.payload.settings.deviceId, {
 			actionId: ev.action.id,
-			type: "rollState",
-			listener: async (event) => {
-				await ev.action.setTitle(`${event.faceIndex + 1}`);
+			type: "batteryLevel",
+			listener: async ({ levelPercent }) => {
+				await ev.action.setTitle(`${levelPercent}%`);
 			},
 		});
 	}

@@ -1,291 +1,211 @@
-/* eslint-disable @typescript-eslint/no-unsafe-function-type */
 import noble, { Peripheral } from "@stoprocent/noble";
-import { MessageType, serializer } from "@systemic-games/pixels-web-connect";
-
-interface DeviceListener {
-	actionId: string;
-	listener: Function;
-}
-
-export interface Device {
-	id: string;
-	peripheral: Peripheral;
-	actions: Set<string>;
-	eventListeners: Map<MessageType, DeviceListener[]>;
-}
-
-export type ScanCallback = ({
-	discoveredDevices,
-	connectedDevices,
-}: {
-	discoveredDevices: Peripheral[];
-	connectedDevices: Peripheral[];
-}) => Promise<void>;
+import { PixelBluetoothConfig } from "../common/types";
+import { serializer } from "@systemic-games/pixels-web-connect";
 
 const knownDevices = ["D20", "D12", "D8", "D6", "D4"];
 
+interface RollEvent {
+	type: number;
+	state: number;
+	faceIndex: number;
+}
+
+interface BatteryEvent {
+	type: number;
+	state: number;
+	levelPercent: number;
+}
+
+interface RollStateListener {
+	actionId: string;
+	type: 'rollState',
+	listener: (event: RollEvent) => Promise<void>
+}
+
+interface BatteryStateListener {
+	actionId: string;
+	type: 'batteryLevel',
+	listener: (event: BatteryEvent) => Promise<void>
+}
+
+type Listener = BatteryStateListener | RollStateListener;
+
 export class PixelManager {
-	private connectedDevices: Map<string, Device> = new Map();
-	private connectingDevices: Map<string, Promise<Device>> = new Map();
-	private discoveredDevices: Map<string, Peripheral> = new Map();
-	private scanningActions: Map<string, ScanCallback> = new Map();
+	private _devices: Map<string, PixelBluetoothConfig> = new Map();
+	private _listeners: Map<string, Listener[]> = new Map();
 
-	public addEventListener(id: string, actionId: string, type: MessageType, listener: Function): void {
-		const connectedDevice = this.connectedDevices.get(id);
+	public async addListener(deviceId: string, listener: Listener) {
+		if (!this._listeners.has(deviceId)) {
+			this._listeners.set(deviceId, []);
+		}
 
-		if (!connectedDevice) {
-			console.warn(`[PixelManager.addEventListener]: Device with id ${id} not found`);
+		const listeners = this._listeners.get(deviceId) as Listener[];
+		listeners.push(listener);
+
+		const device = this._devices.get(deviceId);
+
+		if (!device) {
+			console.error('Device is not connected');
 
 			return;
 		}
 
-		const existingListeners = connectedDevice.eventListeners.get(type);
-
-		if (existingListeners) {
-			const existingListenerIndex = existingListeners.findIndex((existing) => existing.actionId === actionId);
-
-			if (existingListenerIndex !== -1) {
-				console.log(`[PixelManager.addEventListener]: Action has already registered an event listener for ${type}, replacing`);
-
-				existingListeners[existingListenerIndex] = { actionId, listener };
-
-				return;
-			}
-		} else {
-			console.log(`[PixelManager.addEventListener]: Setting listeners array for ${type}`);
-			connectedDevice.eventListeners.set(type, [{ actionId, listener }]);
-
-			return;
+		if (device.notify.listeners('data').length) {
+			device.notify.removeAllListeners();
 		}
 
-		console.log(`[PixelManager.addEventListener]: Adding ${actionId} listener for ${type}`);
-		existingListeners.push({ actionId, listener });
+		this.resetListeners(device);
 	}
 
-	/**
-	 * This helper does several things, connects to a device, registers an action as a listener, and throws
-	 * an error if the device cannot be connected to. If the device is already connected by another action
-	 * instance, we will reuse the connection and "share" it with the subsequent actions.
-	 *
-	 * Cases:
-	 * 1. Device is not in the connected devices map, that means it needs to connected BUT we will want to place a lock on this device
-	 * to ensure no other actions attempt to connect while it is in progress of connecting. To do this, we will set a lockPromise that
-	 * resolves with this newly connected device (this will be returned if another device attempts to connect)
-	 * @param id - ID of the device to connect to
-	 * @param actionId - ID of the action that is trying to connect
-	 * @returns - Device
-	 */
-	public async connect(id: string, actionId: string): Promise<Device> {
-		console.log(`[PixelManager.connect.${id}.${actionId}]: Starting Connect Process`);
+	public async connect(id: string): Promise<void> {
+		try {
+			await noble.waitForPoweredOnAsync(10000);
+			const peripheral = await noble.connectAsync(id, { timeout: 10000 });
 
-		const connectingDevice = this.connectingDevices.get(id);
-		const existingDevice = this.connectedDevices.get(id);
+			console.log(`[PixelManager.connect.${id}]: Device Connected`);
 
-		if (existingDevice) {
-			console.log(`[PixelManager.connect.${id}.${actionId}]: Adding listener and returning existing device`);
-			existingDevice.actions.add(actionId);
+			const { characteristics } = await peripheral.discoverAllServicesAndCharacteristicsAsync();
 
-			return existingDevice;
-		}
+			const notify = characteristics.find(({ properties }) => properties?.includes?.("notify"));
+			const write = characteristics.find(({ properties }) => properties?.includes?.("write"));
 
-		if (connectingDevice) {
-			console.log(`[PixelManager.connect.${id}.${actionId}]: Device is connecting, waiting...`);
+			if (!notify || !write) {
+				console.error(`[PixelManager.connect.${id}]: Required Characteristics not found!`, characteristics, peripheral);
 
-			const device = await connectingDevice;
-
-			console.log(`[PixelManager.connect.${id}.${actionId}]: Adding listener and returning connected device`);
-			device.actions.add(actionId);
-
-			return device;
-		}
-
-		const eventListeners = new Map<MessageType, DeviceListener[]>();
-		const connectionPromise = (async () => {
-			try {
-				await noble.waitForPoweredOnAsync(10000);
-				const peripheral = await noble.connectAsync(id, { timeout: 10000 });
-
-				console.log(`[PixelManager.connect.${id}.${actionId}]: Device Connected`);
-
-				const { characteristics } = await peripheral.discoverAllServicesAndCharacteristicsAsync();
-
-				const notify = characteristics.find(({ properties }) => properties?.includes?.("notify"));
-				const write = characteristics.find(({ properties }) => properties?.includes?.("write"));
-
-				console.log(`[PixelManager.connect.${id}.${actionId}]: Found Characteristics`);
-
-				if (!notify || !write) {
-					console.error(
-						`[PixelManager.connect.${id}.${actionId}]: Required Characteristics not found!`,
-						characteristics,
-						peripheral,
-					);
-
-					throw new Error("Required characteristics not found on Pixel device");
-				}
-
-				notify.on("data", (data: Buffer) => {
-					const dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
-
-					const message = serializer.deserializeMessage(dataView);
-					const messageType = serializer.getMessageType(message);
-
-					console.log(`[device.${id}.messageRecieved]: ${message} (${messageType})`);
-
-					if (eventListeners.has(messageType)) {
-						const listeners = eventListeners.get(messageType) as DeviceListener[];
-
-						listeners.forEach(({ listener }) => listener(message));
-					}
-				});
-
-				await notify.subscribeAsync();
-
-				console.log(`[PixelManager.connect.${id}.${actionId}]: Subscribed to notify event`);
-
-				const newDevice: Device = {
-					id,
-					actions: new Set([actionId]),
-					peripheral,
-					eventListeners,
-				};
-
-				this.connectedDevices.set(id, newDevice);
-				this.connectingDevices.delete(id);
-				this.discoveredDevices.delete(id);
-
-				console.log(`[PixelManager.connect.${id}.${actionId}]: Scanning Actions fanout`, this.scanningActions);
-				// If there are any scanning actions, we need to send this new device to them
-				if (this.scanningActions.size) {
-					this.scanningActions.forEach((callback, key) => {
-						console.log(`[PixelManager.connect.${id}.${key}]: Sending new device`);
-
-						callback({
-							discoveredDevices: [...this.discoveredDevices.values()],
-							connectedDevices: [...this.connectedDevices.values()].map(({ peripheral }) => peripheral as Peripheral),
-						});
-					});
-				}
-
-				return newDevice;
-			} catch (error) {
-				console.error(`[device.${id}]: Something went wrong while connecting to device`, error);
-
-				throw new Error('Something went wrong while connecting to device', { cause: error })
+				throw new Error("Required characteristics not found on Pixel device");
 			}
-		})();
 
-		this.connectingDevices.set(id, connectionPromise);
+			await notify.subscribeAsync();
 
-		return connectionPromise;
+			const device = {
+				id,
+				peripheral,
+				notify,
+				write,
+			};
+
+			this.resetListeners(device);
+
+			console.log(`[PixelManager.connect.${id}]: Subscribed to notify event`);
+
+			this._devices.set(id, device);
+		} catch (error) {
+			console.error(`[device.${id}]: Something went wrong while connecting to device`, error);
+
+			throw new Error("Something went wrong while connecting to device", { cause: error });
+		}
 	}
 
-	public async disconnect(id: string, actionId: string): Promise<void> {
-		const connectedDevice = this.connectedDevices.get(id);
+	public async disconnect(id: string) {
+		const device = this._devices.get(id);
 
-		if (!connectedDevice) {
-			console.warn(`[PixelManager.disconnect]: Attempted to disconnect from an unknown device`);
-
-			return;
-		}
-
-		if (connectedDevice.peripheral.state === "disconnected") {
-			this.connectedDevices.delete(id);
-		}
-
-		if (connectedDevice.peripheral.state !== "connected") {
-			console.error(`[PixelManager.disconnect]: Device is not connected, how did we get here?`);
-
-			return;
-		}
-
-		if (connectedDevice.actions.has(actionId)) {
-			connectedDevice.actions.delete(actionId);
-
-			connectedDevice.eventListeners.forEach((listeners, key) => {
-				connectedDevice.eventListeners.set(
-					key,
-					listeners.filter((listener) => listener.actionId !== actionId),
-				);
-			});
-		}
-
-		if (connectedDevice.actions.size) {
-			console.log(`[PixelManager.disconnect.${id}.${actionId}]: Other actions still connected, connection still open`);
+		if(!device) {
+			console.warn(`Attempted to disconnect from an unknown device ${id}`);
 
 			return;
 		}
 
 		try {
-			await connectedDevice.peripheral.disconnectAsync();
+			await device.peripheral.disconnectAsync();
 
 			console.log(`[PixelManager.disconnect.${id}]: Successfully disconnected device`);
 		} catch (error) {
-			console.error(
-				`[PixelManager.disconnect.${id}.${actionId}]: Device failed to disconnect, swallowing error`,
-				error,
-			);
+			console.error(`[PixelManager.disconnect.${id}]: Device failed to disconnect, swallowing error`, error);
 		}
 
-		this.connectedDevices.delete(id);
+		this._devices.delete(id);
 	}
 
-	public getDevice(id: string): Device | undefined {
-		return this.connectedDevices.get(id);
-	}
-
-	public async startDiscover(actionId: string, callback: ScanCallback) {
-		// This action has already been added to the scan and is already listening
-		if (this.scanningActions.has(actionId)) {
-			console.warn(`[discoverDevices]: Action ${actionId} is already scanning`);
-
-			return;
-		}
-
-		console.log(`[discoverDevices]: Action ${actionId} begin scanning`);
-		this.scanningActions.set(actionId, callback);
-
-		// Another action has already started the scan
-		if (this.scanningActions.size === 1) {
-			console.log(`[discoverDevices]: Initializing Scanner`);
-
+	public async discoverDevices(callback: (id: string, name: string) => void) {
+		try {
 			await noble.waitForPoweredOnAsync(10000);
 			await noble.startScanningAsync();
 
 			noble.on("discover", async (peripheral: Peripheral) => {
 				if (knownDevices.includes(peripheral.advertisement.localName)) {
-					// console.log("[discoverDevices]: Device Found", peripheral);
+					console.log("[discoverDevices]: Device Found", peripheral);
 
-					this.discoveredDevices.set(peripheral.id, peripheral);
-					this.scanningActions.forEach(async (actionCB, key) => {
-						console.log(
-						  `[discoverDevices]: Sending ${peripheral.id} to ${key}`
-						);
-
-						actionCB({
-							connectedDevices: [...this.connectedDevices.values()].map(({ peripheral }) => peripheral as Peripheral),
-							discoveredDevices: [...this.discoveredDevices.values()],
-						});
-					});
+					callback(peripheral.id, peripheral.advertisement.localName);
 				}
 			});
+		} catch(error) {
+			console.log(error);
 		}
 
-		callback({
-			connectedDevices: [...this.connectedDevices.values()].map(({ peripheral }) => peripheral as Peripheral),
-			discoveredDevices: [...this.discoveredDevices.values()],
-		});
+
 	}
 
-	public async stopDiscover(actionId: string) {
-		this.scanningActions.delete(actionId);
+	public getDevice(id: string): PixelBluetoothConfig | undefined {
+		return this._devices.get(id);
+	}
 
-		console.log(`[stopDisocover]: Removing ${actionId} from discovery`);
+	public async removeListener(deviceId: string, actionId: string) {
+		const device = this._devices.get(deviceId);
 
-		if (!this.scanningActions.size) {
-			console.log(`[stopDisocover]: Stopping disocvery, no actions are listening`);
-			await noble.stopScanningAsync();
-			this.discoveredDevices.clear();
+		if (!device) {
+			console.error('Device is not connected');
+
+			return;
 		}
+
+		if (!this._listeners.has(deviceId)) {
+			this._listeners.set(deviceId, []);
+			return;
+		}
+
+		const listeners = this._listeners.get(deviceId) as Listener[];
+		const index = listeners.findIndex(listener => listener.actionId === actionId);
+
+		if (index === -1) {
+			console.warn('Attempted to remove non-listening listener');
+
+			return;
+		}
+
+		this._listeners.set(deviceId, [
+			...listeners.slice(0, index),
+			...listeners.slice(index + 1, listeners.length),
+		]);
+
+		this.resetListeners(device);
+	}
+
+	public async stopDiscover() {
+		try {
+			if (noble.state === 'poweredOn') {
+				await noble.stopScanningAsync();
+				console.log(`[stopDisocover]: Discovery stopped succesfully`);
+			} else {
+				console.log(`[stopDisocover]: Discovery is not running, nothing to stop`);
+			}
+		} catch(error) {
+			console.error('[stopDisocover]: Stopping discovery failed!', error);
+		}
+	}
+
+	private resetListeners(device: PixelBluetoothConfig) {
+		if (device.notify.listeners('data').length) {
+			device.notify.removeAllListeners();
+		}
+
+		const listeners = this._listeners.get(device.id) as Listener[];
+
+		device.notify.on('data', async (data) => {
+			const dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
+			const message = serializer.deserializeMessage(dataView);
+			const messageType = serializer.getMessageType(message);
+
+			console.log(listeners.length);
+
+			await Promise.all(
+				listeners.map(async ({ type, listener}) => {
+					if (type === messageType && type === 'rollState') {
+						await listener(message as RollEvent);
+					} else if (type === messageType && type === 'batteryLevel') {
+						await listener(message as BatteryEvent);
+					}
+				})
+			);
+		});
 	}
 }

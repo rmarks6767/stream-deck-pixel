@@ -1,8 +1,9 @@
-import streamDeck, { action, DidReceiveSettingsEvent, KeyDownEvent, WillAppearEvent } from "@elgato/streamdeck";
-import { DCConfig, GlobalSettings, Pixel } from "../common/types";
+import { action, DidReceiveSettingsEvent, KeyDownEvent, WillAppearEvent } from "@elgato/streamdeck";
+import { Pixel } from "../common/types";
 import { registerDCListener } from "../common/utils";
-import { PixelManager } from "../pixelHelpers/PixelManagerV2";
+import { PixelManager } from "../pixelHelpers/PixelManager";
 import { DisplayActionBase, DisplayActionBaseSettings } from "./DisplayActionBase";
+import { GlobalSettingsController } from "../common/globalSettingsController";
 
 type DCChangeSettings = DisplayActionBaseSettings & {
 	type: "minus" | "plus";
@@ -20,28 +21,27 @@ export class DCChangeAction extends DisplayActionBase<DCChangeSettings> {
 	
 	public override async onKeyDown(ev: KeyDownEvent<DCChangeSettings>): Promise<void> {
 		const { settings } = ev.payload;
+		const { connectedDevices } = await GlobalSettingsController.get();
+		const device = connectedDevices[settings.deviceId];
 
-		if (settings.deviceId) {
+		if (device) {
 			const amountChange = settings.type === "plus" ? 1 : -1;
-
-			const { connectedDevices } = await streamDeck.settings.getGlobalSettings<GlobalSettings>();
-			const newDifficulty = (connectedDevices?.[settings.deviceId]?.dcConfig?.difficulty || 10) + amountChange;
+			const newDifficulty = device.dcConfig.difficulty + amountChange;
 
 			const newDevice: Pixel = {
-				...(connectedDevices[settings.deviceId] as Pixel),
+				...device,
 				dcConfig: {
-					...(connectedDevices[settings.deviceId].dcConfig as DCConfig),
+					...device.dcConfig,
 					difficulty: newDifficulty,
 				},
 			};
 
-			await streamDeck.settings.setGlobalSettings<GlobalSettings>({
+			await GlobalSettingsController.set({
 				connectedDevices: {
 					...connectedDevices,
 					[settings.deviceId]: newDevice,
 				},
 			});
-			await streamDeck.settings.getGlobalSettings<GlobalSettings>();
 
 			await registerDCListener(this._pixelManager, newDevice);
 		}
@@ -53,8 +53,6 @@ export class DCChangeAction extends DisplayActionBase<DCChangeSettings> {
 
 	private async updateDifficultyDisplay(ev: DidReceiveSettingsEvent<DCChangeSettings> | WillAppearEvent<DCChangeSettings>): Promise<void> {
 		const { settings } = ev.payload;
-
-		console.log()
 
 		await ev.action.setTitle(settings.type === "plus" ? "+" : "-");
 	}

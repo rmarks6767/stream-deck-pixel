@@ -49,8 +49,6 @@
 			}
 
 			SDPIComponents.streamDeckClient.sendToPropertyInspector.subscribe(({ payload }) => {
-				console.log(`[UI]: Received event`, payload);
-
 				switch (payload.event) {
 					case "functionFailed": {
 						const loading = document.getElementById(`loading-${payload.deviceId}`);

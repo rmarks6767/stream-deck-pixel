@@ -1,26 +1,20 @@
 import streamDeck from "@elgato/streamdeck";
-// import { PixelBattery } from "./actions/PixelBattery";
-// import { PixelDC } from "./actions/PixelDC";
-// import { PixelManager } from "./pixelHelpers/PixelManager";
-import { PixelManager as PixelManagerV2 } from "./pixelHelpers/PixelManagerV2";
-// import { PixelDCCounter } from "./actions/PixelDCChange";
+import { PixelManager } from "./pixelHelpers/PixelManager";
 import { startup } from "./common/utils";
 import { ConnectAction } from "./actions/ConnectAction";
 import { RollAction } from "./actions/RollAction";
 import { DCAction } from "./actions/DCAction";
 import { DCChangeAction } from "./actions/DCChangeAction";
+import { BatteryAction } from "./actions/BatteryAction";
 
-// We can enable "trace" logging so that all messages between the Stream Deck, and the plugin are recorded. When storing sensitive information
+const pixelManager = new PixelManager();
+
+streamDeck.actions.registerAction(new ConnectAction(pixelManager));
+streamDeck.actions.registerAction(new BatteryAction(pixelManager));
+streamDeck.actions.registerAction(new RollAction(pixelManager));
+streamDeck.actions.registerAction(new DCAction(pixelManager));
+streamDeck.actions.registerAction(new DCChangeAction(pixelManager));
+
 streamDeck.logger.setLevel('error');
 
-// const pixelManager = new PixelManager();
-const pixelManagerV2 = new PixelManagerV2();
-
-// Register the increment action.
-streamDeck.actions.registerAction(new ConnectAction(pixelManagerV2));
-streamDeck.actions.registerAction(new RollAction(pixelManagerV2));
-streamDeck.actions.registerAction(new DCAction(pixelManagerV2));
-streamDeck.actions.registerAction(new DCChangeAction(pixelManagerV2));
-
-// Finally, connect to the Stream Deck.
-streamDeck.connect().then(() => startup(pixelManagerV2));
+streamDeck.connect().then(() => startup(pixelManager));

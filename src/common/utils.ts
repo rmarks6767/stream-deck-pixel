@@ -1,8 +1,23 @@
+import { PixelManager } from "../pixelHelpers/PixelManager";
+import { soundPlayer } from "../playSound";
+import { DCType, Pixel, PixelConnectionState } from "./types";
+import { GlobalSettingsController } from "./globalSettingsController";
 import streamDeck from "@elgato/streamdeck";
 
-import { PixelManager } from "../pixelHelpers/PixelManagerV2";
-import { soundPlayer } from "../playSound";
-import { DCType, GlobalSettings, Pixel, PixelConnectionState } from "./types";
+export 	const setConnectionStatus = async (device: Pixel, connectionState: PixelConnectionState) => {
+	const settings = await GlobalSettingsController.get();	
+	
+	await GlobalSettingsController.set({
+		...settings,
+		connectedDevices: {
+			...settings.connectedDevices,
+			[device.id]: {
+				...device,
+				connectionState,
+			},
+		},
+	});
+};
 
 /**
  * Function responsible for running after plugin has successfully connected.
@@ -11,7 +26,7 @@ import { DCType, GlobalSettings, Pixel, PixelConnectionState } from "./types";
  * @param pixelManager - An instance of the PixelManager class
  */
 export const startup = async (pixelManager: PixelManager) => {
-	let settings = await streamDeck.settings.getGlobalSettings<GlobalSettings>();
+	let settings = await GlobalSettingsController.get();
 
 	// Initial creation of the settings object
 	if (!settings) {
@@ -20,45 +35,29 @@ export const startup = async (pixelManager: PixelManager) => {
 			connectedDevices: {},
 		};
 
-		await streamDeck.settings.setGlobalSettings<GlobalSettings>(settings);
+		await GlobalSettingsController.set(settings);
 	}
-
-	const setConnectionStatus = async (id: string, connectionState: PixelConnectionState) => {
-		await streamDeck.settings.setGlobalSettings<GlobalSettings>({
-			...settings,
-			connectedDevices: {
-				...settings.connectedDevices,
-				[id]: {
-					...settings.connectedDevices[id],
-					connectionState,
-				},
-			},
-		});
-	};
 
 	await Promise.all(
 		Object.entries(settings.connectedDevices).map(async ([deviceId, device]) => {
 			try {
-				console.log(`[startup]: Attempting to connect to ${deviceId}`);
-
-				await setConnectionStatus(deviceId, PixelConnectionState.CONNECTING);
+				await setConnectionStatus(device, PixelConnectionState.CONNECTING);
 				await pixelManager.connect(deviceId);
-				await setConnectionStatus(deviceId, PixelConnectionState.CONNECTED);
-
+				await setConnectionStatus(device, PixelConnectionState.CONNECTED);
 				await registerDCListener(pixelManager, device);
-				console.log(`[startup}]: Successfully connected to ${deviceId}`);
 			} catch (error) {
-				console.error(`[startup]: Failed to connect to device, setting as disconnected`, error);
+				streamDeck.logger.error({
+					message: '[startup]: Failed to connect to device, setting as disconnected',
+					error
+				})
 
-				await setConnectionStatus(deviceId, PixelConnectionState.DISCONNECTED);
+				await setConnectionStatus(device, PixelConnectionState.DISCONNECTED);
 			}
 		}),
 	);
 };
 
 export const registerDCListener = async (pixelManager: PixelManager, device: Pixel) => {
-	console.log(`[registerDCListener]: Registering DC listener for device ${device.id}`, device);
-	
 	const { dcConfig } = device;
 
 	if (!dcConfig) {
@@ -137,22 +136,8 @@ export const registerDCListener = async (pixelManager: PixelManager, device: Pix
 	});
 };
 
-/**
- * Helper function to set all the pixel devices as disconnected.
- */
-export const setAllAsDisconnected = async () => {
-	const settings = await streamDeck.settings.getGlobalSettings<GlobalSettings>();
-	const newConnectedDevices: { [key: string]: Pixel } = {};
-
-	Object.entries(settings.connectedDevices || {}).forEach(([deviceId, device]) => {
-		newConnectedDevices[deviceId] = {
-			...device,
-			connectionState: PixelConnectionState.DISCONNECTED,
-		};
-	});
-
-	await streamDeck.settings.setGlobalSettings<GlobalSettings>({
-		...settings,
-		connectedDevices: newConnectedDevices,
-	});
-};
+export const wait = async (ms: number) => {
+	await new Promise((resolve) => {
+		setTimeout(() => resolve(null), ms);
+	})
+}

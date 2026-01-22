@@ -15,9 +15,9 @@ export enum DCType {
 }
 
 export enum PixelConnectionState {
-	CONNECTED = 'CONNECTED',
-	DISCONNECTED = 'DISCONNECTED',
-	CONNECTING = 'CONNECTING',
+	CONNECTED = "CONNECTED",
+	DISCONNECTED = "DISCONNECTED",
+	CONNECTING = "CONNECTING",
 }
 
 export interface DCConfig extends JsonObject {
@@ -36,12 +36,12 @@ export interface DCConfig extends JsonObject {
 export interface Pixel extends JsonObject {
 	id: string;
 	name: string;
-    connectionState: PixelConnectionState;
-	dcConfig?: DCConfig;
+	connectionState: PixelConnectionState;
+	dcConfig: DCConfig;
 }
 
 export interface GlobalSettings extends JsonObject {
-    connectedDevices: {
-        [deviceId: string]: Pixel;
-    }
+	connectedDevices: {
+		[deviceId: string]: Pixel;
+	};
 }
