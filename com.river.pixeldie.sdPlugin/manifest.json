@@ -91,7 +91,7 @@
             "UUID": "com.river.pixeldie.battery",
             "Icon": "imgs/actions/counter/icon",
             "Tooltip": "Displays the current battery level of the connected Pixel Die.",
-            "PropertyInspectorPath": "ui/find-devices.html",
+            "PropertyInspectorPath": "ui/device-dropdown.html",
             "UserTitleEnabled": false,
             "Controllers": [
                 "Keypad"

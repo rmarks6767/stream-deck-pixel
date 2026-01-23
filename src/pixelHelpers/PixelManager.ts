@@ -2,7 +2,7 @@ import noble, { Peripheral } from "@stoprocent/noble";
 import { PixelBluetoothConfig } from "../common/types";
 import { serializer } from "@systemic-games/pixels-web-connect";
 
-const knownDevices = ["D20", "D12", "D8", "D6", "D4"];
+const knownDevices = ["D20", "D12", "D8", "D6", "D4", ]; // "Govee_H6098_4A34"];
 
 interface RollEvent {
 	type: number;
@@ -98,6 +98,11 @@ export class PixelManager {
 
 	public async disconnect(id: string) {
 		const device = this._devices.get(id);
+		const listeners = this._listeners.get(id);
+
+		if (listeners) {
+			this._listeners.delete(id);
+		}
 
 		if(!device) {
 			console.warn(`Attempted to disconnect from an unknown device ${id}`);
@@ -194,8 +199,6 @@ export class PixelManager {
 			const dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
 			const message = serializer.deserializeMessage(dataView);
 			const messageType = serializer.getMessageType(message);
-
-			console.log(listeners.length);
 
 			await Promise.all(
 				listeners.map(async ({ type, listener}) => {
