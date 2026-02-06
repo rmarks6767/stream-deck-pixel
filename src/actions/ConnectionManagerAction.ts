@@ -13,7 +13,7 @@ import { PixelManager } from "../pixelHelpers/PixelManager";
 import { GlobalSettingsController } from "../common/globalSettingsController";
 import { setConnectionStatus, wait } from "../common/utils";
 
-export interface ConnectActionSettings extends JsonObject {
+export interface ConnectionManagerActionSettings extends JsonObject {
 	discoveredDevices: Pixel[];
 }
 
@@ -23,7 +23,7 @@ interface PluginEvent extends JsonObject {
 }
 
 @action({ UUID: "com.river.pixeldie.connectionmanager" })
-export class ConnectAction extends SingletonAction<ConnectActionSettings> {
+export class ConnectionManagerAction extends SingletonAction<ConnectionManagerActionSettings> {
 	protected _pixelManager: PixelManager;
 
 	constructor(pixelManager: PixelManager) {
@@ -32,7 +32,7 @@ export class ConnectAction extends SingletonAction<ConnectActionSettings> {
 		this._pixelManager = pixelManager;
 	}
 
-	public override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<ConnectActionSettings>): Promise<void> {
+	public override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<ConnectionManagerActionSettings>): Promise<void> {
 		await streamDeck.ui.sendToPropertyInspector({
 			event: "getDiscoveredDevices",
 			discoveredDevices: ev.payload.settings.discoveredDevices,
@@ -40,7 +40,7 @@ export class ConnectAction extends SingletonAction<ConnectActionSettings> {
 	}
 
 	public override async onPropertyInspectorDidAppear(
-		ev: PropertyInspectorDidAppearEvent<ConnectActionSettings>,
+		ev: PropertyInspectorDidAppearEvent<ConnectionManagerActionSettings>,
 	): Promise<void> {
 		const { connectedDevices } = await GlobalSettingsController.get();
 		const { discoveredDevices } = await ev.action.getSettings();
@@ -49,6 +49,11 @@ export class ConnectAction extends SingletonAction<ConnectActionSettings> {
 			await streamDeck.ui.sendToPropertyInspector({
 				event: "getKnownDevices",
 				knownDevices: Object.values(connectedDevices),
+			});
+
+			await streamDeck.ui.sendToPropertyInspector({
+				event: "getRegisteredListeners",
+				registeredListeners: this._pixelManager.getListeners(),
 			});
 		})
 
@@ -89,10 +94,14 @@ export class ConnectAction extends SingletonAction<ConnectActionSettings> {
 			event: "getDiscoveredDevices",
 			discoveredDevices,
 		});
+		await streamDeck.ui.sendToPropertyInspector({
+			event: "getRegisteredListeners",
+			registeredListeners: this._pixelManager.getListeners(),
+		});
 	}
 
 	public override async onPropertyInspectorDidDisappear(
-		ev: PropertyInspectorDidDisappearEvent<ConnectActionSettings>,
+		ev: PropertyInspectorDidDisappearEvent<ConnectionManagerActionSettings>,
 	): Promise<void> {
 		const settings = await ev.action.getSettings();
 
@@ -104,7 +113,7 @@ export class ConnectAction extends SingletonAction<ConnectActionSettings> {
 		GlobalSettingsController.removeListener(ev.action.id);
 	}
 
-	public override async onSendToPlugin(ev: SendToPluginEvent<PluginEvent, ConnectActionSettings>): Promise<void> {
+	public override async onSendToPlugin(ev: SendToPluginEvent<PluginEvent, ConnectionManagerActionSettings>): Promise<void> {
 		switch (ev.payload.event) {
 			case "connectDevice":
 				await this.connectToDevice(ev);
@@ -118,9 +127,9 @@ export class ConnectAction extends SingletonAction<ConnectActionSettings> {
 		}
 	}
 
-	public override async onWillAppear(ev: WillAppearEvent<ConnectActionSettings>): Promise<void> {
+	public override async onWillAppear(ev: WillAppearEvent<ConnectionManagerActionSettings>): Promise<void> {
 		if (!ev.payload.settings.type) {
-			await ev.action.setSettings<ConnectActionSettings>({
+			await ev.action.setSettings<ConnectionManagerActionSettings>({
 				discoveredDevices: [],
 			});
 		}
@@ -148,7 +157,7 @@ export class ConnectAction extends SingletonAction<ConnectActionSettings> {
 		}
 	}
 
-	private async connectToDevice(ev: SendToPluginEvent<PluginEvent, ConnectActionSettings>) {
+	private async connectToDevice(ev: SendToPluginEvent<PluginEvent, ConnectionManagerActionSettings>) {
 		const { deviceId } = ev.payload;
 
 		const localSettings = await ev.action.getSettings();
