@@ -77,11 +77,11 @@
             "DisableAutomaticStates": true,
             "States": [
                 {
-                    "Image": "imgs/actions/counter/key",
+                    "Image": "imgs/actions/minus",
                     "TitleAlignment": "middle"
                 },
                 {
-                    "Image": "imgs/actions/counter/key",
+                    "Image": "imgs/actions/plus",
                     "TitleAlignment": "middle"
                 }
             ]

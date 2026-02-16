@@ -54,6 +54,6 @@ export class DCChangeAction extends DisplayActionBase<DCChangeSettings> {
 	private async updateDifficultyDisplay(ev: DidReceiveSettingsEvent<DCChangeSettings> | WillAppearEvent<DCChangeSettings>): Promise<void> {
 		const { settings } = ev.payload;
 
-		await ev.action.setTitle(settings.type === "plus" ? "+" : "-");
+		await ev.action.setImage(settings.type === "plus" ? "imgs/actions/plus" : "imgs/actions/minus");
 	}
 }

@@ -13,12 +13,16 @@ import { PixelManager } from "../pixelHelpers/PixelManager";
 import { GlobalSettingsController } from "../common/globalSettingsController";
 import { setConnectionStatus, wait } from "../common/utils";
 
+const defaultSettings: ConnectionManagerActionSettings = {
+	discoveredDevices: [],
+};
+
 export interface ConnectionManagerActionSettings extends JsonObject {
 	discoveredDevices: Pixel[];
 }
 
 interface PluginEvent extends JsonObject {
-	event: "connectDevice" | "deleteDevice" | "reconnectDevice";
+	event: 'clearAllDevices' | "connectDevice" | "deleteDevice" | "reconnectDevice";
 	deviceId: string;
 }
 
@@ -49,11 +53,6 @@ export class ConnectionManagerAction extends SingletonAction<ConnectionManagerAc
 			await streamDeck.ui.sendToPropertyInspector({
 				event: "getKnownDevices",
 				knownDevices: Object.values(connectedDevices),
-			});
-
-			await streamDeck.ui.sendToPropertyInspector({
-				event: "getRegisteredListeners",
-				registeredListeners: this._pixelManager.getListeners(),
 			});
 		})
 
@@ -94,21 +93,12 @@ export class ConnectionManagerAction extends SingletonAction<ConnectionManagerAc
 			event: "getDiscoveredDevices",
 			discoveredDevices,
 		});
-		await streamDeck.ui.sendToPropertyInspector({
-			event: "getRegisteredListeners",
-			registeredListeners: this._pixelManager.getListeners(),
-		});
 	}
 
 	public override async onPropertyInspectorDidDisappear(
 		ev: PropertyInspectorDidDisappearEvent<ConnectionManagerActionSettings>,
 	): Promise<void> {
-		const settings = await ev.action.getSettings();
-
-		await ev.action.setSettings({
-			...settings,
-			discoveredDevices: [],
-		});
+		await ev.action.setSettings(defaultSettings);
 		await this._pixelManager.stopDiscover();
 		GlobalSettingsController.removeListener(ev.action.id);
 	}
@@ -124,15 +114,22 @@ export class ConnectionManagerAction extends SingletonAction<ConnectionManagerAc
 			case "reconnectDevice":
 				await this.reconnectToDevice(ev.payload.deviceId);
 				break;
+			case "clearAllDevices":
+				await this.clearAllDevices(ev);
+				break;
 		}
 	}
 
 	public override async onWillAppear(ev: WillAppearEvent<ConnectionManagerActionSettings>): Promise<void> {
 		if (!ev.payload.settings.type) {
-			await ev.action.setSettings<ConnectionManagerActionSettings>({
-				discoveredDevices: [],
-			});
+			await ev.action.setSettings<ConnectionManagerActionSettings>(defaultSettings);
 		}
+	}
+
+	private async clearAllDevices(ev: SendToPluginEvent<PluginEvent, ConnectionManagerActionSettings>) {
+		await GlobalSettingsController.resetGlobalSettings();
+		await this._pixelManager.reset();
+		await ev.action.setSettings(defaultSettings);
 	}
 
 	private async connect(device: Pixel, retry = 0) {

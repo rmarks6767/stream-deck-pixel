@@ -175,6 +175,12 @@ export class PixelManager {
 		this.resetListeners(device);
 	}
 
+	public async reset() {
+		for (const deviceId of this._devices.keys()) {
+			await this.disconnect(deviceId);
+		}
+	}
+
 	public async stopDiscover() {
 		try {
 			if (noble.state === 'poweredOn') {
@@ -193,7 +199,7 @@ export class PixelManager {
 			device.notify.removeAllListeners();
 		}
 
-		const listeners = this._listeners.get(device.id) as Listener[];
+		const listeners = this._listeners.get(device.id) ?? [] as Listener[];
 
 		device.notify.on('data', async (data) => {
 			const dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);

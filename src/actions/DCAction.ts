@@ -5,6 +5,12 @@ import { DCConfig, DCType } from "../common/types";
 import { registerDCListener } from "../common/utils";
 import { GlobalSettingsController } from "../common/globalSettingsController";
 
+const defaultSettings: DCSettings = {
+	deviceId: "",
+	type: DCType.standard,
+	difficulty: 10,
+};
+
 type DCSettings = DCConfig & DisplayActionBaseSettings;
 
 @action({ UUID: "com.river.pixeldie.dc" })
@@ -15,9 +21,8 @@ export class DCAction extends DisplayActionBase<DCSettings> {
 
 	public override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<DCSettings>): Promise<void> {
 		const settings = {
+			...defaultSettings,
 			...ev.payload.settings,
-			type: ev.payload.settings.type ?? DCType.standard,
-			difficulty: ev.payload.settings.difficulty ?? 10,
 		}
         
 		// Two things need to be done here:
@@ -76,6 +81,14 @@ export class DCAction extends DisplayActionBase<DCSettings> {
 
 		const { connectedDevices } = await GlobalSettingsController.get();
 		const device = connectedDevices?.[ev.payload.settings.deviceId];
+
+		// If we cannot find the device in our global settings
+		// then we need to reset the action settings to default
+		if (!device) {
+			await ev.action.setSettings(defaultSettings);
+			return;
+		}
+
 		const { difficulty, type} = device.dcConfig;
 
 		GlobalSettingsController.addListener(ev.action.id, async (settings) => {

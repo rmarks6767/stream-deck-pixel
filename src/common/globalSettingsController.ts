@@ -1,6 +1,11 @@
 import streamDeck from "@elgato/streamdeck";
 import { GlobalSettings } from "./types";
 
+export const defaultGlobalSettings: GlobalSettings = {
+	actions: {},
+	connectedDevices: {},
+};
+
 export class GlobalSettingsController {
 	private static listeners: Map<string, (event: GlobalSettings) => Promise<void> | void> = new Map()
 
@@ -14,6 +19,10 @@ export class GlobalSettingsController {
 
 	public static removeListener(actionId: string) {
 		this.listeners.delete(actionId);
+	}
+
+	public static async resetGlobalSettings(): Promise<void> {
+		await this.set(defaultGlobalSettings);
 	}
 
 	public static async set(settings: GlobalSettings): Promise<void> {

@@ -1,7 +1,7 @@
 import { PixelManager } from "../pixelHelpers/PixelManager";
 import { soundPlayer } from "../playSound";
 import { DCType, Pixel, PixelConnectionState } from "./types";
-import { GlobalSettingsController } from "./globalSettingsController";
+import { defaultGlobalSettings, GlobalSettingsController } from "./globalSettingsController";
 import streamDeck from "@elgato/streamdeck";
 
 export 	const setConnectionStatus = async (device: Pixel, connectionState: PixelConnectionState) => {
@@ -30,11 +30,7 @@ export const startup = async (pixelManager: PixelManager) => {
 
 	// Initial creation of the settings object
 	if (!settings) {
-		settings = {
-			actions: {},
-			connectedDevices: {},
-		};
-
+		settings = defaultGlobalSettings;
 		await GlobalSettingsController.set(settings);
 	}
 
@@ -63,6 +59,8 @@ export const registerDCListener = async (pixelManager: PixelManager, device: Pix
 	if (!dcConfig) {
 		return;
 	}
+
+	console.log(`REMOVING ${device.id} global-dc-listener`)
 
 	pixelManager.removeListener(device.id, "global-dc-listener");
 

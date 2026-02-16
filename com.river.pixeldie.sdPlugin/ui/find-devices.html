@@ -12,6 +12,11 @@
 	<body>
 		<sdpi-item class="devices-container" id="discoveredDevicesContainer" label="Discovered Devices"></sdpi-item>
 		<sdpi-item class="devices-container" id="connectedDevicesContainer" label="Connected Devices"></sdpi-item>
+		<sdpi-item>
+			<sdpi-button onclick="javascript:clearAllDevices()">
+				Clear All Devices
+			</sdpi-button>
+		</sdpi-item>
 
 		<script>
 			const connectDevice = async (deviceId) => {
@@ -39,6 +44,12 @@
 				await SDPIComponents.streamDeckClient.send('sendToPlugin', { 
 					event: 'reconnectDevice', 
 					deviceId 
+				});
+			}
+
+			const clearAllDevices = async () => {
+				await SDPIComponents.streamDeckClient.send('sendToPlugin', { 
+					event: 'clearAllDevices'
 				});
 			}
 
