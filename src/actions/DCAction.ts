@@ -1,5 +1,5 @@
 import { action, DidReceiveSettingsEvent, KeyDownEvent, WillAppearEvent, WillDisappearEvent } from "@elgato/streamdeck";
-import { PixelManager } from "../pixelHelpers/PixelManager";
+import { PixelManager } from "../common/pixelManager";
 import { DisplayActionBase, DisplayActionBaseSettings } from "./DisplayActionBase";
 import { DCConfig, DCType } from "../common/types";
 import { registerDCListener } from "../common/utils";
@@ -20,6 +20,8 @@ export class DCAction extends DisplayActionBase<DCSettings> {
 	}
 
 	public override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<DCSettings>): Promise<void> {
+		console.info(`[DCAction.onDidReceiveSettings]: Event Received`, { event: ev });
+
 		const settings = {
 			...defaultSettings,
 			...ev.payload.settings,
@@ -60,21 +62,26 @@ export class DCAction extends DisplayActionBase<DCSettings> {
 	}
 
 	public override async onKeyDown(ev: KeyDownEvent<DCSettings>): Promise<void> {
+		console.info(`[DCAction.onKeyDown]: Event Received`, { event: ev });
+
 		const { type = DCType.standard, difficulty = 10 } = ev.payload.settings;
     
 		const enumSize = Object.values(DCType).filter((v) => typeof v === "number").length;
 		const newDCType = ((type + 1) % enumSize) as DCType;
     
+		console.info(`[DCAction.onKeyDown]: Updating DC type from ${type} to ${newDCType}`);
+
 		await this.setImage(ev, newDCType);
 		await ev.action.setTitle(this.formatTitle(difficulty, newDCType));
 		await ev.action.setSettings({
 			...ev.payload.settings,
 			type: newDCType,
 		});
-		await ev.action.getSettings<DCSettings>();
 	}
 
 	public override async onWillAppear(ev: WillAppearEvent<DCSettings>): Promise<void> {
+		console.info(`[DCAction.onWillAppear]: Event Received`, { event: ev });
+		
 		if (!ev.payload.settings.deviceId) {
 			return;
 		}
@@ -91,16 +98,16 @@ export class DCAction extends DisplayActionBase<DCSettings> {
 
 		const { difficulty, type} = device.dcConfig;
 
-		GlobalSettingsController.addListener(ev.action.id, async (settings) => {
-			const updatedDevice = settings.connectedDevices[ev.payload.settings.deviceId];
-			if (updatedDevice) {
-				const { difficulty, type } = updatedDevice.dcConfig;
+		// GlobalSettingsController.addListener(ev.action.id, async (settings) => {
+		// 	const updatedDevice = settings.connectedDevices[ev.payload.settings.deviceId];
+		// 	if (updatedDevice) {
+		// 		const { difficulty, type } = updatedDevice.dcConfig;
 				
-				this.setImage(ev, type);
-				ev.action.setTitle(this.formatTitle(difficulty, type));
-				await this.registerListener(ev);
-			}
-		})
+		// 		this.setImage(ev, type);
+		// 		ev.action.setTitle(this.formatTitle(difficulty, type));
+		// 		await this.registerListener(ev);
+		// 	}
+		// })
 
 
 		await this.setImage(ev, type);
@@ -109,6 +116,8 @@ export class DCAction extends DisplayActionBase<DCSettings> {
 	}
 
 	public override async onWillDisappear(ev: WillDisappearEvent<DCSettings>): Promise<void> {
+		console.info(`[DCAction.onWillDisappear]: Event Received`, { event: ev });
+
 		await this._pixelManager.removeListener(ev.payload.settings.deviceId, ev.action.id);
 		GlobalSettingsController.removeListener(ev.action.id);
 	}
@@ -136,6 +145,8 @@ export class DCAction extends DisplayActionBase<DCSettings> {
 	private async registerListener(
 		ev: DidReceiveSettingsEvent<DCSettings> | KeyDownEvent<DCSettings> | WillAppearEvent<DCSettings>,
 	) {
+		console.info(`[DCAction.registerListener]: Event Received`, { event: ev });
+
 		if (!ev.payload.settings.deviceId) {
 			return;
 		}
@@ -192,6 +203,8 @@ export class DCAction extends DisplayActionBase<DCSettings> {
 	}
 
 	private async setImage(ev: KeyDownEvent<DCSettings> | WillAppearEvent<DCSettings>, type: DCType) {
+		console.info(`[DCAction.setImage]: Event Received`, { event: ev });
+		
 		switch (type) {
 			case DCType.standard:
 				await ev.action.setImage("imgs/actions/standard");

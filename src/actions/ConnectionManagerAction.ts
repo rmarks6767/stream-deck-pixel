@@ -9,7 +9,7 @@ import streamDeck, {
 } from "@elgato/streamdeck";
 import { JsonObject } from "@elgato/utils";
 import { DCType, GlobalSettings, Pixel, PixelConnectionState } from "../common/types";
-import { PixelManager } from "../pixelHelpers/PixelManager";
+import { PixelManager } from "../common/pixelManager";
 import { GlobalSettingsController } from "../common/globalSettingsController";
 import { setConnectionStatus, wait } from "../common/utils";
 

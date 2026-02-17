@@ -1,7 +1,7 @@
-import { action, DidReceiveSettingsEvent, KeyDownEvent, WillAppearEvent } from "@elgato/streamdeck";
+import { action, DidReceiveSettingsEvent, KeyDownEvent, WillAppearEvent, WillDisappearEvent } from "@elgato/streamdeck";
 import { Pixel } from "../common/types";
 import { registerDCListener } from "../common/utils";
-import { PixelManager } from "../pixelHelpers/PixelManager";
+import { PixelManager } from "../common/pixelManager";
 import { DisplayActionBase, DisplayActionBaseSettings } from "./DisplayActionBase";
 import { GlobalSettingsController } from "../common/globalSettingsController";
 
@@ -16,10 +16,14 @@ export class DCChangeAction extends DisplayActionBase<DCChangeSettings> {
 	}
 
 	public override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<DCChangeSettings>): Promise<void> {
+		console.info(`[DCChangeAction.onDidReceiveSettings]: Event Received`, { event: ev });
+
 		await this.updateDifficultyDisplay(ev);
 	}
 	
 	public override async onKeyDown(ev: KeyDownEvent<DCChangeSettings>): Promise<void> {
+		console.info(`[DCChangeAction.onKeyDown]: Event Received`, { event: ev });
+
 		const { settings } = ev.payload;
 		const { connectedDevices } = await GlobalSettingsController.get();
 		const device = connectedDevices[settings.deviceId];
@@ -48,10 +52,20 @@ export class DCChangeAction extends DisplayActionBase<DCChangeSettings> {
 	}
 
 	public override async onWillAppear(ev: WillAppearEvent<DCChangeSettings>): Promise<void> {
+		console.info(`[DCChangeAction.onWillAppear]: Event Received`, { event: ev });
+
 		await this.updateDifficultyDisplay(ev);
 	}
 
+	public override async onWillDisappear(ev: WillDisappearEvent<DisplayActionBaseSettings>): Promise<void> {
+		console.info(`[DCChangeAction.onWillDisappear]: Event Received`, { event: ev });
+
+		await this._pixelManager.removeListener(ev.payload.settings.deviceId, ev.action.id);
+	}
+
 	private async updateDifficultyDisplay(ev: DidReceiveSettingsEvent<DCChangeSettings> | WillAppearEvent<DCChangeSettings>): Promise<void> {
+		console.info(`[DCChangeAction.updateDifficultyDisplay]: Event Received`, { event: ev });
+		
 		const { settings } = ev.payload;
 
 		await ev.action.setImage(settings.type === "plus" ? "imgs/actions/plus" : "imgs/actions/minus");

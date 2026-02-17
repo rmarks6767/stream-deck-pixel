@@ -1,5 +1,5 @@
 import { action, DidReceiveSettingsEvent, WillAppearEvent, WillDisappearEvent } from "@elgato/streamdeck";
-import { PixelManager } from "../pixelHelpers/PixelManager";
+import { PixelManager } from "../common/pixelManager";
 import { DisplayActionBase, DisplayActionBaseSettings } from "./DisplayActionBase";
 
 @action({ UUID: "com.river.pixeldie.battery" })

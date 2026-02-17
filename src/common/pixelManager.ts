@@ -1,40 +1,24 @@
 import noble, { Peripheral } from "@stoprocent/noble";
-import { PixelBluetoothConfig } from "../common/types";
 import { serializer } from "@systemic-games/pixels-web-connect";
 
-const knownDevices = ["D20", "D12", "D8", "D6", "D4", ]; // "Govee_H6098_4A34"];
+import { PixelBluetoothConfig } from "./types";
+import { BatteryEvent, Listener, RollEvent } from "./pixelManager.types";
 
-interface RollEvent {
-	type: number;
-	state: number;
-	faceIndex: number;
-}
-
-interface BatteryEvent {
-	type: number;
-	state: number;
-	levelPercent: number;
-}
-
-interface RollStateListener {
-	actionId: string;
-	type: 'rollState',
-	listener: (event: RollEvent) => Promise<void>
-}
-
-interface BatteryStateListener {
-	actionId: string;
-	type: 'batteryLevel',
-	listener: (event: BatteryEvent) => Promise<void>
-}
-
-type Listener = BatteryStateListener | RollStateListener;
+const knownDevices = [
+	"D20",
+	"D12",
+	"D8",
+	"D6",
+	"D4",
+];
 
 export class PixelManager {
 	private _devices: Map<string, PixelBluetoothConfig> = new Map();
 	private _listeners: Map<string, Listener[]> = new Map();
 
 	public async addListener(deviceId: string, listener: Listener) {
+		console.info(`[PixelManager.addListener]: Adding listener to device ${deviceId}`);
+
 		if (!this._listeners.has(deviceId)) {
 			this._listeners.set(deviceId, []);
 		}
@@ -45,12 +29,12 @@ export class PixelManager {
 		const device = this._devices.get(deviceId);
 
 		if (!device) {
-			console.error('Device is not connected');
+			console.error(`[PixelManager.addListener]: Device ${deviceId} is not connected, returning`);
 
 			return;
 		}
 
-		if (device.notify.listeners('data').length) {
+		if (device.notify.listeners("data").length) {
 			device.notify.removeAllListeners();
 		}
 
@@ -58,11 +42,13 @@ export class PixelManager {
 	}
 
 	public async connect(id: string): Promise<void> {
+		console.info(`[PixelManager.connect]: Attempting to connect to device ${id}`);
+
 		try {
 			await noble.waitForPoweredOnAsync(10000);
 			const peripheral = await noble.connectAsync(id, { timeout: 10000 });
 
-			console.log(`[PixelManager.connect.${id}]: Device Connected`);
+			console.log(`[PixelManager.connect]: Connected to device ${id}`, { peripheral });
 
 			const { characteristics } = await peripheral.discoverAllServicesAndCharacteristicsAsync();
 
@@ -70,7 +56,10 @@ export class PixelManager {
 			const write = characteristics.find(({ properties }) => properties?.includes?.("write"));
 
 			if (!notify || !write) {
-				console.error(`[PixelManager.connect.${id}]: Required Characteristics not found!`, characteristics, peripheral);
+				console.error(`[PixelManager.connect]: Required Characteristics not found for device ${id}`, {
+					characteristics,
+					peripheral,
+				});
 
 				throw new Error("Required characteristics not found on Pixel device");
 			}
@@ -86,17 +75,19 @@ export class PixelManager {
 
 			this.resetListeners(device);
 
-			console.log(`[PixelManager.connect.${id}]: Subscribed to notify event`);
+			console.log(`[PixelManager.connect]: Subscribed to notify event for device ${id}`, { device });
 
 			this._devices.set(id, device);
 		} catch (error) {
-			console.error(`[device.${id}]: Something went wrong while connecting to device`, error);
+			console.error(`[PixelManager.connect]: Something went wrong while connecting to device ${id}`, { error });
 
 			throw new Error("Something went wrong while connecting to device", { cause: error });
 		}
 	}
 
 	public async disconnect(id: string) {
+		console.info(`[PixelManager.disconnect]: Attempting to disconnect from device ${id}`);
+
 		const device = this._devices.get(id);
 		const listeners = this._listeners.get(id);
 
@@ -104,8 +95,8 @@ export class PixelManager {
 			this._listeners.delete(id);
 		}
 
-		if(!device) {
-			console.warn(`Attempted to disconnect from an unknown device ${id}`);
+		if (!device) {
+			console.warn(`[PixelManager.disconnect]: Attempted to disconnect from an unknown device ${id}`);
 
 			return;
 		}
@@ -113,42 +104,50 @@ export class PixelManager {
 		try {
 			await device.peripheral.disconnectAsync();
 
-			console.log(`[PixelManager.disconnect.${id}]: Successfully disconnected device`);
+			console.log(`[PixelManager.disconnect]: Successfully disconnected device ${id}`);
 		} catch (error) {
-			console.error(`[PixelManager.disconnect.${id}]: Device failed to disconnect, swallowing error`, error);
+			console.error(`[PixelManager.disconnect]: Device failed to disconnect from device ${id}, swallowing error`, {
+				error,
+			});
 		}
 
 		this._devices.delete(id);
 	}
 
 	public async discoverDevices(callback: (id: string, name: string) => void) {
+		console.info("[PixelManager.discoverDevices]: Starting device discovery");
+
 		try {
 			await noble.waitForPoweredOnAsync(10000);
 			await noble.startScanningAsync();
 
 			noble.on("discover", async (peripheral: Peripheral) => {
 				if (knownDevices.includes(peripheral.advertisement.localName)) {
-					console.log("[discoverDevices]: Device Found", peripheral);
+					console.info("[PixelManager.discoverDevices]: Device Found", { peripheral });
 
 					callback(peripheral.id, peripheral.advertisement.localName);
 				}
 			});
-		} catch(error) {
-			console.log(error);
+		} catch (error) {
+			console.error("[PixelManager.discoverDevices]: Something went wrong while discovering devices", { error });
+
+			throw new Error("Something went wrong while discovering devices", { cause: error });
 		}
-
-
 	}
 
 	public getDevice(id: string): PixelBluetoothConfig | undefined {
+		console.info(`[PixelManager.getDevice]: Getting device ${id}`);
+
 		return this._devices.get(id);
 	}
 
 	public async removeListener(deviceId: string, actionId: string) {
+		console.info(`[PixelManager.removeListener]: Removing listener ${actionId} from device ${deviceId}`);
+
 		const device = this._devices.get(deviceId);
 
 		if (!device) {
-			console.error('Device is not connected');
+			console.error(`[PixelManager.removeListener]: Device ${deviceId} is not connected`);
 
 			return;
 		}
@@ -159,10 +158,12 @@ export class PixelManager {
 		}
 
 		const listeners = this._listeners.get(deviceId) as Listener[];
-		const index = listeners.findIndex(listener => listener.actionId === actionId);
+		const index = listeners.findIndex((listener) => listener.actionId === actionId);
 
 		if (index === -1) {
-			console.warn('Attempted to remove non-listening listener');
+			console.warn(
+				`[PixelManager.removeListener]: Attempted to remove non-listening listener ${actionId} from device ${deviceId}`,
+			);
 
 			return;
 		}
@@ -176,44 +177,60 @@ export class PixelManager {
 	}
 
 	public async reset() {
+		console.info("[PixelManager.reset]: Resetting PixelManager, disconnecting from all devices");
+
 		for (const deviceId of this._devices.keys()) {
 			await this.disconnect(deviceId);
 		}
 	}
 
 	public async stopDiscover() {
+		console.info("[PixelManager.stopDiscover]: Stopping device discovery");
+
 		try {
-			if (noble.state === 'poweredOn') {
+			if (noble.state === "poweredOn") {
 				await noble.stopScanningAsync();
-				console.log(`[stopDisocover]: Discovery stopped succesfully`);
+
+				console.info(`[PixelManager.stopDiscover]: Discovery stopped successfully`);
 			} else {
-				console.log(`[stopDisocover]: Discovery is not running, nothing to stop`);
+				console.info(`[PixelManager.stopDiscover]: Discovery is not running, nothing to stop`);
 			}
-		} catch(error) {
-			console.error('[stopDisocover]: Stopping discovery failed!', error);
+		} catch (error) {
+			console.error("[PixelManager.stopDiscover]: Stopping discovery failed!", { error });
 		}
 	}
 
 	private resetListeners(device: PixelBluetoothConfig) {
-		if (device.notify.listeners('data').length) {
+		console.info(`[PixelManager.resetListeners]: Resetting listeners for device ${device.id}`);
+
+		if (device.notify.listeners("data").length) {
+			console.info(`[PixelManager.resetListeners]: Removing existing listeners for device ${device.id}`);
+
 			device.notify.removeAllListeners();
 		}
 
-		const listeners = this._listeners.get(device.id) ?? [] as Listener[];
+		const listeners = this._listeners.get(device.id);
 
-		device.notify.on('data', async (data) => {
+		if (!listeners) {
+			console.info(`[PixelManager.resetListeners]: No listeners to reset for device ${device.id}`);
+			return;
+		}
+
+		console.info(`[PixelManager.resetListeners]: Setting up ${listeners.length} listeners for device ${device.id}`);
+
+		device.notify.on("data", async (data) => {
 			const dataView = new DataView(data.buffer, data.byteOffset, data.byteLength);
 			const message = serializer.deserializeMessage(dataView);
 			const messageType = serializer.getMessageType(message);
 
 			await Promise.all(
-				listeners.map(async ({ type, listener}) => {
-					if (type === messageType && type === 'rollState') {
+				listeners.map(async ({ type, listener }) => {
+					if (type === messageType && type === "rollState") {
 						await listener(message as RollEvent);
-					} else if (type === messageType && type === 'batteryLevel') {
+					} else if (type === messageType && type === "batteryLevel") {
 						await listener(message as BatteryEvent);
 					}
-				})
+				}),
 			);
 		});
 	}

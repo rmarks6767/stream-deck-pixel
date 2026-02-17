@@ -1,5 +1,5 @@
 import streamDeck from "@elgato/streamdeck";
-import { PixelManager } from "./pixelHelpers/PixelManager";
+import { PixelManager } from "./common/pixelManager";
 import { startup } from "./common/utils";
 import { ConnectionManagerAction } from "./actions/ConnectionManagerAction";
 import { RollAction } from "./actions/RollAction";

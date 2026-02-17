@@ -1,4 +1,4 @@
-import { PixelManager } from "../pixelHelpers/PixelManager";
+import { PixelManager } from "./pixelManager";
 import { soundPlayer } from "../playSound";
 import { DCType, Pixel, PixelConnectionState } from "./types";
 import { defaultGlobalSettings, GlobalSettingsController } from "./globalSettingsController";

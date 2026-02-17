@@ -1,6 +1,6 @@
 import streamDeck, { SendToPluginEvent, SingletonAction } from "@elgato/streamdeck";
 import { JsonObject } from "@elgato/utils";
-import { PixelManager } from "../pixelHelpers/PixelManager";
+import { PixelManager } from "../common/pixelManager";
 import { GlobalSettingsController } from "../common/globalSettingsController";
 
 interface PluginEvent extends JsonObject {
