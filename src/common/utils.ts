@@ -80,6 +80,7 @@ export const registerDCListener = async (pixelManager: PixelManager, device: Pix
 				switch (dcConfig.type) {
 					case DCType.standard: {
 						if (roll1 === 20 && dcConfig.nat20Audio) {
+							console.log('Playing nat 20');
 							await soundPlayer.play(dcConfig.nat20Audio);
 						} else if (roll1 >= dcConfig.difficulty && dcConfig.successAudio) {
 							await soundPlayer.play(dcConfig.successAudio);

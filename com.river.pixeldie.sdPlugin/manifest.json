@@ -1,5 +1,5 @@
 {
-    "Name": "pixeldie",
+    "Name": "Pixel Dice",
     "Version": "0.1.0.0",
     "Author": "River",
     "Actions": [
@@ -104,10 +104,10 @@
             ]
         }
     ],
-    "Category": "pixeldie",
+    "Category": "Pixel Dice",
     "CategoryIcon": "imgs/plugin/category-icon",
     "CodePath": "bin/plugin.js",
-    "Description": "Stream Deck Pixel Die integration for running multi-actions, setting DCs, and interacting with the Pixel Die ",
+    "Description": "Stream Deck Pixel Dice integration for running multi-actions, setting DCs, and interacting with the Pixel Die ",
     "Icon": "imgs/plugin/marketplace",
     "SDKVersion": 2,
     "Software": {

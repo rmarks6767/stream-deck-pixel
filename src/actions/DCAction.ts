@@ -2,7 +2,6 @@ import { action, DidReceiveSettingsEvent, KeyDownEvent, WillAppearEvent, WillDis
 import { PixelManager } from "../common/pixelManager";
 import { DisplayActionBase, DisplayActionBaseSettings } from "./DisplayActionBase";
 import { DCConfig, DCType } from "../common/types";
-import { registerDCListener } from "../common/utils";
 import { GlobalSettingsController } from "../common/globalSettingsController";
 
 const defaultSettings: DCSettings = {
@@ -13,52 +12,69 @@ const defaultSettings: DCSettings = {
 
 type DCSettings = DCConfig & DisplayActionBaseSettings;
 
+const dcTypeTitles = {
+	[DCType.advantage]: 'Adv',
+	[DCType.disadvantage]: 'Dis',
+	[DCType.standard]: 'Flat'
+}
+
 @action({ UUID: "com.river.pixeldie.dc" })
 export class DCAction extends DisplayActionBase<DCSettings> {
 	constructor(pixelManager: PixelManager) {
 		super(pixelManager);
 	}
 
+
+	// deviceId is set
+	// - Add settings listener
+	// - 
 	public override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<DCSettings>): Promise<void> {
 		console.info(`[DCAction.onDidReceiveSettings]: Event Received`, { event: ev });
 
-		const settings = {
-			...defaultSettings,
-			...ev.payload.settings,
-		}
-        
-		// Two things need to be done here:
-		// 1. Register display events for the selected device
-		// 2. Update global settings to set the dc configuration for the selected device
+		const { connectedDevices } = await GlobalSettingsController.get();
+		const device = connectedDevices?.[ev.payload.settings.deviceId || ''];
 
-		if(settings.deviceId) {
-			const { connectedDevices } = await GlobalSettingsController.get();
+		if (!device) {
+			await ev.action.setSettings(defaultSettings);
+			await ev.action.setTitle('No\nDevice\nSelected');
 
-			const newDevice = {
-				...connectedDevices?.[settings.deviceId],
-				dcConfig: {
-					...connectedDevices?.[settings.deviceId]?.dcConfig,
-					...settings
-				}
+			return;
+		} 
+
+		const updateHandler = async (type: DCType, difficulty: number) => {
+			const newSettings = {
+				...defaultSettings,
+				difficulty,
+				type
 			};
 
-			await GlobalSettingsController.set({
-				connectedDevices: {
-					...connectedDevices,
-					[settings.deviceId]: newDevice
+			await this.registerListener({
+				...ev,
+				payload: {
+					...ev.payload, 
+					settings: newSettings
 				}
 			});
 
-			await registerDCListener(this._pixelManager, newDevice);
-			await ev.action.setSettings(settings);
-		    await this.registerListener({
-				...ev,
-				payload: {
-					...ev.payload,
-					settings
-				}
-			});
+			await this.setImage(ev, type);
+			await ev.action.setTitle(this.formatTitle(difficulty, type));
+			await ev.action.setSettings(newSettings);
 		}
+
+		const newSettings = {
+			...defaultSettings,
+			...device.dcConfig,
+		}
+
+		
+		GlobalSettingsController.addListener(ev.action.id, async (settings) => {
+			const updatedDevice = settings.connectedDevices[ev.payload.settings.deviceId as string];
+			if (updatedDevice) {
+				await updateHandler(updatedDevice.dcConfig.type, updatedDevice.dcConfig.difficulty)
+			}
+		});
+
+		await updateHandler(newSettings.type, newSettings.difficulty);
 	}
 
 	public override async onKeyDown(ev: KeyDownEvent<DCSettings>): Promise<void> {
@@ -71,55 +87,80 @@ export class DCAction extends DisplayActionBase<DCSettings> {
     
 		console.info(`[DCAction.onKeyDown]: Updating DC type from ${type} to ${newDCType}`);
 
-		await this.setImage(ev, newDCType);
-		await ev.action.setTitle(this.formatTitle(difficulty, newDCType));
-		await ev.action.setSettings({
+		const newSettings = {
 			...ev.payload.settings,
 			type: newDCType,
+		}
+
+		await this.registerListener({
+			...ev,
+			payload: {
+				...ev.payload,
+				settings: newSettings
+			}
 		});
+		await this.setImage(ev, newDCType);
+		await ev.action.setTitle(this.formatTitle(difficulty, newDCType));
+		await ev.action.setSettings(newSettings);
 	}
 
+
+	// Action Appears
+	// - Add listener for DC update
+	// - Add listener for saved config
+	// - Set Image to DC Type
+	// - Set Text to DC and DC Type
 	public override async onWillAppear(ev: WillAppearEvent<DCSettings>): Promise<void> {
 		console.info(`[DCAction.onWillAppear]: Event Received`, { event: ev });
 		
-		if (!ev.payload.settings.deviceId) {
-			return;
-		}
-
 		const { connectedDevices } = await GlobalSettingsController.get();
-		const device = connectedDevices?.[ev.payload.settings.deviceId];
+		const device = connectedDevices?.[ev.payload.settings.deviceId || ''];
 
-		// If we cannot find the device in our global settings
-		// then we need to reset the action settings to default
 		if (!device) {
 			await ev.action.setSettings(defaultSettings);
+			await ev.action.setTitle('No\nDevice\nSelected');
+
 			return;
 		}
 
-		const { difficulty, type} = device.dcConfig;
+		const updateHandler = async (type: DCType, difficulty: number) => {
+			const newSettings = {
+				...defaultSettings,
+				...ev.payload.settings,
+				difficulty,
+				type
+			};
 
-		// GlobalSettingsController.addListener(ev.action.id, async (settings) => {
-		// 	const updatedDevice = settings.connectedDevices[ev.payload.settings.deviceId];
-		// 	if (updatedDevice) {
-		// 		const { difficulty, type } = updatedDevice.dcConfig;
-				
-		// 		this.setImage(ev, type);
-		// 		ev.action.setTitle(this.formatTitle(difficulty, type));
-		// 		await this.registerListener(ev);
-		// 	}
-		// })
+			await this.registerListener({
+				...ev,
+				payload: {
+					...ev.payload, 
+					settings: newSettings
+				}
+			});
 
+			await this.setImage(ev, type);
+			await ev.action.setTitle(this.formatTitle(difficulty, type));
+			await ev.action.setSettings(newSettings);
+		}
 
-		await this.setImage(ev, type);
-		await ev.action.setTitle(this.formatTitle(difficulty, type));
-		await this.registerListener(ev);
+		GlobalSettingsController.addListener(ev.action.id, async (settings) => {
+			const updatedDevice = settings.connectedDevices[ev.payload.settings.deviceId as string];
+			if (updatedDevice) {
+				await updateHandler(updatedDevice.dcConfig.type, updatedDevice.dcConfig.difficulty)
+			}
+		});
+
+		await updateHandler(device.dcConfig.difficulty, device.dcConfig.type)
 	}
 
 	public override async onWillDisappear(ev: WillDisappearEvent<DCSettings>): Promise<void> {
 		console.info(`[DCAction.onWillDisappear]: Event Received`, { event: ev });
 
-		await this._pixelManager.removeListener(ev.payload.settings.deviceId, ev.action.id);
-		GlobalSettingsController.removeListener(ev.action.id);
+		if (ev.payload.settings.deviceId) {
+			await this._pixelManager.removeListener(ev.payload.settings.deviceId, ev.action.id);
+			GlobalSettingsController.removeListener(ev.action.id);
+		}
 	}
 
 	private formatRoll(roll?: number | string) {
@@ -136,10 +177,10 @@ export class DCAction extends DisplayActionBase<DCSettings> {
 
 	private formatTitle(difficulty: number, type: DCType, roll1?: number | string, roll2?: number | string) {
 		if (type === DCType.standard) {
-			return `${difficulty}\n[${this.formatRoll(roll1)}]`;
+			return `${difficulty}\n[${this.formatRoll(roll1)}]\n${dcTypeTitles[type]}`;
 		}
 
-		return `${difficulty}\n[${this.formatRoll(roll1)}][${this.formatRoll(roll2)}]`;
+		return `${difficulty}\n[${this.formatRoll(roll1)}][${this.formatRoll(roll2)}]\n${dcTypeTitles[type]}`;
 	}
 
 	private async registerListener(
@@ -202,7 +243,7 @@ export class DCAction extends DisplayActionBase<DCSettings> {
 		});
 	}
 
-	private async setImage(ev: KeyDownEvent<DCSettings> | WillAppearEvent<DCSettings>, type: DCType) {
+	private async setImage(ev: DidReceiveSettingsEvent<DCSettings>| KeyDownEvent<DCSettings> | WillAppearEvent<DCSettings>, type: DCType) {
 		console.info(`[DCAction.setImage]: Event Received`, { event: ev });
 		
 		switch (type) {
@@ -217,3 +258,20 @@ export class DCAction extends DisplayActionBase<DCSettings> {
 		}
 	}
 }
+
+
+
+
+
+
+// Key is Clicked
+// - Set image to new DC Type
+// - Set text to DC and new DC Type
+// - Set settings to include new config
+// - Update listener for new settings
+
+// DC is Updated
+// - Update listener
+// - Update text
+
+// DC Change Action is clicked (DC is updated)

@@ -8,7 +8,7 @@ interface PluginEvent extends JsonObject {
 }
 
 export interface DisplayActionBaseSettings extends JsonObject {
-	deviceId: string;
+	deviceId?: string;
 }
 
 export class DisplayActionBase<T extends JsonObject = JsonObject> extends SingletonAction<DisplayActionBaseSettings & T> {
