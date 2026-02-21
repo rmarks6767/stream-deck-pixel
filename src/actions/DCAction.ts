@@ -1,170 +1,124 @@
 import { action, DidReceiveSettingsEvent, KeyDownEvent, WillAppearEvent, WillDisappearEvent } from "@elgato/streamdeck";
+import z from "zod";
+
+import { EventBus } from "../common/eventBus";
+import { EventType, PixelRollEvent } from "../common/eventBus.types";
 import { PixelManager } from "../common/pixelManager";
-import { DisplayActionBase, DisplayActionBaseSettings } from "./DisplayActionBase";
-import { DCConfig, DCType } from "../common/types";
-import { GlobalSettingsController } from "../common/globalSettingsController";
+import { DCType } from "../common/types";
+import { DisplayActionBase } from "./DisplayActionBase";
+import { soundPlayer } from "../playSound";
 
-const defaultSettings: DCSettings = {
-	deviceId: "",
-	type: DCType.standard,
-	difficulty: 10,
-};
+const Settings = z.object({
+	deviceId: z.string().default(""),
+	type: z.enum(DCType).default(DCType.standard),
+	difficulty: z.number().default(10),
+	nat20Audio: z.string().default(""),
+	nat1Audio: z.string().default(""),
+	successAudio: z.string().default(""),
+	failureAudio: z.string().default(""),
+});
 
-type DCSettings = DCConfig & DisplayActionBaseSettings;
+type DCSettings = z.infer<typeof Settings>;
 
 const dcTypeTitles = {
-	[DCType.advantage]: 'Adv',
-	[DCType.disadvantage]: 'Dis',
-	[DCType.standard]: 'Flat'
-}
+	[DCType.advantage]: "Adv",
+	[DCType.disadvantage]: "Dis",
+	[DCType.standard]: "Flat",
+};
 
-@action({ UUID: "com.river.pixeldie.dc" })
+export const dcActionManifestId = "com.river.pixeldie.dc";
+
+@action({ UUID: dcActionManifestId })
 export class DCAction extends DisplayActionBase<DCSettings> {
 	constructor(pixelManager: PixelManager) {
 		super(pixelManager);
 	}
 
-
-	// deviceId is set
-	// - Add settings listener
-	// - 
 	public override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<DCSettings>): Promise<void> {
-		console.info(`[DCAction.onDidReceiveSettings]: Event Received`, { event: ev });
+		const settings = Settings.parse(ev.payload.settings)
 
-		const { connectedDevices } = await GlobalSettingsController.get();
-		const device = connectedDevices?.[ev.payload.settings.deviceId || ''];
-
-		if (!device) {
-			await ev.action.setSettings(defaultSettings);
-			await ev.action.setTitle('No\nDevice\nSelected');
-
-			return;
-		} 
-
-		const updateHandler = async (type: DCType, difficulty: number) => {
-			const newSettings = {
-				...defaultSettings,
-				difficulty,
-				type
-			};
-
-			await this.registerListener({
-				...ev,
-				payload: {
-					...ev.payload, 
-					settings: newSettings
-				}
-			});
-
-			await this.setImage(ev, type);
-			await ev.action.setTitle(this.formatTitle(difficulty, type));
-			await ev.action.setSettings(newSettings);
-		}
-
-		const newSettings = {
-			...defaultSettings,
-			...device.dcConfig,
-		}
-
-		
-		GlobalSettingsController.addListener(ev.action.id, async (settings) => {
-			const updatedDevice = settings.connectedDevices[ev.payload.settings.deviceId as string];
-			if (updatedDevice) {
-				await updateHandler(updatedDevice.dcConfig.type, updatedDevice.dcConfig.difficulty)
-			}
-		});
-
-		await updateHandler(newSettings.type, newSettings.difficulty);
+		await this.addListeners(ev);
+		await ev.action.setTitle(
+			this.formatTitle(settings.difficulty, settings.type)
+		);
+		await this.setImage(ev, settings.type);
 	}
 
 	public override async onKeyDown(ev: KeyDownEvent<DCSettings>): Promise<void> {
-		console.info(`[DCAction.onKeyDown]: Event Received`, { event: ev });
+		const settings = Settings.parse(ev.payload.settings)
 
-		const { type = DCType.standard, difficulty = 10 } = ev.payload.settings;
-    
 		const enumSize = Object.values(DCType).filter((v) => typeof v === "number").length;
-		const newDCType = ((type + 1) % enumSize) as DCType;
-    
-		console.info(`[DCAction.onKeyDown]: Updating DC type from ${type} to ${newDCType}`);
+		const newDCType = ((settings.type + 1) % enumSize) as DCType;
 
-		const newSettings = {
-			...ev.payload.settings,
-			type: newDCType,
-		}
 
-		await this.registerListener({
-			...ev,
-			payload: {
-				...ev.payload,
-				settings: newSettings
-			}
+		await ev.action.setSettings({
+			...settings,
+			type: newDCType
 		});
-		await this.setImage(ev, newDCType);
-		await ev.action.setTitle(this.formatTitle(difficulty, newDCType));
-		await ev.action.setSettings(newSettings);
+		await ev.action.getSettings();
 	}
 
-
-	// Action Appears
-	// - Add listener for DC update
-	// - Add listener for saved config
-	// - Set Image to DC Type
-	// - Set Text to DC and DC Type
 	public override async onWillAppear(ev: WillAppearEvent<DCSettings>): Promise<void> {
-		console.info(`[DCAction.onWillAppear]: Event Received`, { event: ev });
-		
-		const { connectedDevices } = await GlobalSettingsController.get();
-		const device = connectedDevices?.[ev.payload.settings.deviceId || ''];
+		const settings = Settings.parse(ev.payload.settings)
 
-		if (!device) {
-			await ev.action.setSettings(defaultSettings);
-			await ev.action.setTitle('No\nDevice\nSelected');
+		await ev.action.setTitle(
+			this.formatTitle(settings.difficulty, settings.type)
+		);
+		await this.setImage(ev, settings.type);
+		await this.addListeners(ev);
+	}
+
+	public override onWillDisappear(ev: WillDisappearEvent<DCSettings>): void {
+		this.removeListeners(ev.action.id);
+	}
+
+	private async addListeners(
+		ev: DidReceiveSettingsEvent<DCSettings> | KeyDownEvent<DCSettings> | WillAppearEvent<DCSettings>,
+	) {
+		const settings = Settings.parse(ev.payload.settings)
+
+		if (!settings.deviceId) {
+			await ev.action.showAlert();
+			await ev.action.setTitle("No\nDevice");
+			this.removeListeners(ev.action.id);
 
 			return;
 		}
 
-		const updateHandler = async (type: DCType, difficulty: number) => {
-			const newSettings = {
-				...defaultSettings,
-				...ev.payload.settings,
-				difficulty,
-				type
-			};
+		EventBus.subscribe({
+			id: ev.action.id,
+			type: EventType.Settings,
+			listener: async (event: Partial<DCSettings>) => {
+				console.log("Received some settings", { event });
 
-			await this.registerListener({
-				...ev,
-				payload: {
-					...ev.payload, 
-					settings: newSettings
-				}
-			});
-
-			await this.setImage(ev, type);
-			await ev.action.setTitle(this.formatTitle(difficulty, type));
-			await ev.action.setSettings(newSettings);
-		}
-
-		GlobalSettingsController.addListener(ev.action.id, async (settings) => {
-			const updatedDevice = settings.connectedDevices[ev.payload.settings.deviceId as string];
-			if (updatedDevice) {
-				await updateHandler(updatedDevice.dcConfig.type, updatedDevice.dcConfig.difficulty)
-			}
+				await ev.action.setSettings({
+					...settings,
+					difficulty: settings.difficulty + event.difficulty!,
+				});
+				await ev.action.getSettings();
+			},
 		});
 
-		await updateHandler(device.dcConfig.difficulty, device.dcConfig.type)
-	}
+		EventBus.subscribe({
+			id: ev.action.id,
+			type: EventType.PixelRoll,
+			subscribeTo: settings.deviceId,
+			listener: this.pixelListener(ev),
+		});
 
-	public override async onWillDisappear(ev: WillDisappearEvent<DCSettings>): Promise<void> {
-		console.info(`[DCAction.onWillDisappear]: Event Received`, { event: ev });
-
-		if (ev.payload.settings.deviceId) {
-			await this._pixelManager.removeListener(ev.payload.settings.deviceId, ev.action.id);
-			GlobalSettingsController.removeListener(ev.action.id);
-		}
+		EventBus.subscribe({
+			id: ev.action.id,
+			type: EventType.PixelDisconnect,
+			subscribeTo: settings.deviceId,
+			listener: async () => {
+				await ev.action.showAlert();
+				await ev.action.setTitle("No\nDevice");
+			},
+		});
 	}
 
 	private formatRoll(roll?: number | string) {
-		if (typeof roll === 'string') {
+		if (typeof roll === "string") {
 			return roll;
 		}
 
@@ -183,69 +137,118 @@ export class DCAction extends DisplayActionBase<DCSettings> {
 		return `${difficulty}\n[${this.formatRoll(roll1)}][${this.formatRoll(roll2)}]\n${dcTypeTitles[type]}`;
 	}
 
-	private async registerListener(
+	private pixelListener(
 		ev: DidReceiveSettingsEvent<DCSettings> | KeyDownEvent<DCSettings> | WillAppearEvent<DCSettings>,
 	) {
-		console.info(`[DCAction.registerListener]: Event Received`, { event: ev });
+		const { 
+			type, 
+			difficulty,
+			nat20Audio,
+			successAudio, 
+			failureAudio, 
+			nat1Audio,
+		} = Settings.parse(ev.payload.settings);
 
-		if (!ev.payload.settings.deviceId) {
-			return;
-		}
-
-		await this._pixelManager.removeListener(ev.payload.settings.deviceId, ev.action.id);
-
-		const { difficulty = 10, type = DCType.standard } = ev.payload.settings;
 		let rolls: number[] = [];
 		let rollingTitle: string = ': ';
-        
-		await this._pixelManager.addListener(ev.payload.settings.deviceId, {
-			actionId: ev.action.id,
-			type: "rollState",
-			listener: async (event) => {
-				if (event.state === 1) {
-					if (rolls.length === 2 || type === DCType.standard) {
-						rolls = [];
-					}
-                
-					rolls.push(event.faceIndex + 1);
-					const [roll1, roll2] = rolls;
-                
-					await ev.action.setTitle(this.formatTitle(difficulty, type, roll1, roll2));
-                
-					switch (type) {
-						case DCType.advantage: {
-							if ((roll1 === 20 || roll2 === 20)) {
-								await ev.action.setTitle(this.formatTitle(difficulty, type, 20, 20));
-								rolls = [];
-							}
-							break;
+		return async ({ event }: PixelRollEvent) => {
+			if (event.state === 1) {
+				if (rolls.length === 2 || type === DCType.standard) {
+					rolls = [];
+				}
+
+				rolls.push(event.faceIndex + 1);
+				const [roll1, roll2] = rolls;
+
+				await ev.action.setTitle(this.formatTitle(difficulty, type, roll1, roll2));
+
+				switch (type) {
+					case DCType.standard: {
+						if (roll1 === 20 && nat20Audio) {
+							console.log('Playing nat 20');
+							await soundPlayer.play(nat20Audio);
+						} else if (roll1 >= difficulty && successAudio) {
+							await soundPlayer.play(successAudio);
+						} else if (roll1 === 1 && nat1Audio) {
+							await soundPlayer.play(nat1Audio);
+						} else if (roll1 < difficulty && failureAudio) {
+							await soundPlayer.play(failureAudio);
 						}
-						case DCType.disadvantage: {
-							if ((roll1 === 1 || roll2 === 1)) {
-								await ev.action.setTitle(this.formatTitle(difficulty, type, 1, 1));
-								rolls = [];
-							}
-							break;
-						}
-					}
-				} else if (event.state === 3) {
-					if (rolls.length === 2 || type === DCType.standard) {
-						rolls = [];
+						break;
 					}
 
-					const [roll1, roll2] = rolls;
-                
-					await ev.action.setTitle(this.formatTitle(difficulty, type, roll1 || rollingTitle, roll2 || rollingTitle));
-                
-					rollingTitle = rollingTitle === ': ' ? ' :' : ': ';
+					case DCType.advantage: {
+						if ((roll1 === 20 || roll2 === 20)) {
+							await ev.action.setTitle(this.formatTitle(difficulty, type, 20, 20));
+							rolls = [];
+
+							if (nat20Audio) {
+								await soundPlayer.play(nat20Audio);
+							}
+						} else if (
+							((roll1 >= difficulty && !roll2) ||
+								(roll1 < difficulty && roll2 >= difficulty)) &&
+							successAudio
+						) {
+							await soundPlayer.play(successAudio);
+						} else if ((roll1 === 1 || roll2 === 1) && nat1Audio) {
+							await soundPlayer.play(nat1Audio);
+						} else if (roll1 < difficulty && roll2 < difficulty && failureAudio) {
+							await soundPlayer.play(failureAudio);
+						}
+
+						break;
+					}
+
+					case DCType.disadvantage: {
+						if (roll1 === 20 && roll2 === 20 && nat20Audio) {
+							await soundPlayer.play(nat20Audio);
+						} else if (roll1 >= difficulty && roll2 >= difficulty && successAudio) {
+							await soundPlayer.play(successAudio);
+						} else if ((roll1 === 1 || roll2 === 1)) {
+							await ev.action.setTitle(this.formatTitle(difficulty, type, 1, 1));
+
+							if (nat1Audio) {
+								await soundPlayer.play(nat1Audio);
+							}
+							rolls = [];
+						} else if (
+							((roll1 < difficulty && !roll2) ||
+								(roll1 >= difficulty && roll2 < difficulty)) &&
+							failureAudio
+						) {
+							await soundPlayer.play(failureAudio);
+						}
+
+						break;
+					}
 				}
-			},
-		});
+			} else if (event.state === 3) {
+				if (rolls.length === 2 || type === DCType.standard) {
+					rolls = [];
+				}
+
+				const [roll1, roll2] = rolls;
+
+				await ev.action.setTitle(this.formatTitle(difficulty, type, roll1 || rollingTitle, roll2 || rollingTitle));
+
+				rollingTitle = rollingTitle === ': ' ? ' :' : ': ';
+			}
+		}
 	}
 
-	private async setImage(ev: DidReceiveSettingsEvent<DCSettings>| KeyDownEvent<DCSettings> | WillAppearEvent<DCSettings>, type: DCType) {
+	private async removeListeners(id: string) {
+		EventBus.unsubscribe(EventType.Settings, id);
+		EventBus.unsubscribe(EventType.PixelRoll, id);
+		EventBus.unsubscribe(EventType.PixelDisconnect, id);
+	}
+
+	private async setImage(
+		ev: DidReceiveSettingsEvent<DCSettings> | KeyDownEvent<DCSettings> | WillAppearEvent<DCSettings>,
+		type: DCType,
+	) {
 		console.info(`[DCAction.setImage]: Event Received`, { event: ev });
-		
+
 		switch (type) {
 			case DCType.standard:
 				await ev.action.setImage("imgs/actions/standard");
@@ -258,20 +261,3 @@ export class DCAction extends DisplayActionBase<DCSettings> {
 		}
 	}
 }
-
-
-
-
-
-
-// Key is Clicked
-// - Set image to new DC Type
-// - Set text to DC and new DC Type
-// - Set settings to include new config
-// - Update listener for new settings
-
-// DC is Updated
-// - Update listener
-// - Update text
-
-// DC Change Action is clicked (DC is updated)

@@ -24,13 +24,9 @@ export interface DCConfig extends JsonObject {
 	type: DCType;
 	difficulty: number;
 	nat20Audio?: string;
-	nat20Color?: string;
 	nat1Audio?: string;
-	nat1Color?: string;
 	successAudio?: string;
-	successColor?: string;
 	failureAudio?: string;
-	failureColor?: string;
 }
 
 export interface Pixel extends JsonObject {

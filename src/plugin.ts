@@ -13,7 +13,7 @@ streamDeck.actions.registerAction(new ConnectionManagerAction(pixelManager));
 streamDeck.actions.registerAction(new BatteryAction(pixelManager));
 streamDeck.actions.registerAction(new RollAction(pixelManager));
 streamDeck.actions.registerAction(new DCAction(pixelManager));
-streamDeck.actions.registerAction(new DCChangeAction(pixelManager));
+streamDeck.actions.registerAction(new DCChangeAction());
 
 streamDeck.logger.setLevel('error');
 

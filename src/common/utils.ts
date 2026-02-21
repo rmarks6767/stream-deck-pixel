@@ -1,6 +1,6 @@
 import { PixelManager } from "./pixelManager";
-import { soundPlayer } from "../playSound";
-import { DCType, Pixel, PixelConnectionState } from "./types";
+// import { soundPlayer } from "../playSound";
+import { Pixel, PixelConnectionState } from "./types";
 import { defaultGlobalSettings, GlobalSettingsController } from "./globalSettingsController";
 import streamDeck from "@elgato/streamdeck";
 
@@ -40,7 +40,6 @@ export const startup = async (pixelManager: PixelManager) => {
 				await setConnectionStatus(device, PixelConnectionState.CONNECTING);
 				await pixelManager.connect(deviceId);
 				await setConnectionStatus(device, PixelConnectionState.CONNECTED);
-				await registerDCListener(pixelManager, device);
 			} catch (error) {
 				streamDeck.logger.error({
 					message: '[startup]: Failed to connect to device, setting as disconnected',
@@ -51,88 +50,6 @@ export const startup = async (pixelManager: PixelManager) => {
 			}
 		}),
 	);
-};
-
-export const registerDCListener = async (pixelManager: PixelManager, device: Pixel) => {
-	const { dcConfig } = device;
-
-	if (!dcConfig) {
-		return;
-	}
-
-	console.log(`REMOVING ${device.id} global-dc-listener`)
-
-	pixelManager.removeListener(device.id, "global-dc-listener");
-
-	let rolls: number[] = [];
-	await pixelManager.addListener(device.id, {
-		actionId: "global-dc-listener",
-		type: "rollState",
-		listener: async ({ type, faceIndex, state }) => {
-			if (state === 1) {
-				if (rolls.length === 2 || type === DCType.standard) {
-					rolls = [];
-				}
-
-				rolls.push(faceIndex + 1);
-				const [roll1, roll2] = rolls;
-
-				switch (dcConfig.type) {
-					case DCType.standard: {
-						if (roll1 === 20 && dcConfig.nat20Audio) {
-							console.log('Playing nat 20');
-							await soundPlayer.play(dcConfig.nat20Audio);
-						} else if (roll1 >= dcConfig.difficulty && dcConfig.successAudio) {
-							await soundPlayer.play(dcConfig.successAudio);
-						} else if (roll1 === 1 && dcConfig.nat1Audio) {
-							await soundPlayer.play(dcConfig.nat1Audio);
-						} else if (roll1 < dcConfig.difficulty && dcConfig.failureAudio) {
-							await soundPlayer.play(dcConfig.failureAudio);
-						}
-						break;
-					}
-
-					case DCType.advantage: {
-						if ((roll1 === 20 || roll2 === 20) && dcConfig.nat20Audio) {
-							await soundPlayer.play(dcConfig.nat20Audio);
-							rolls = [];
-						} else if (
-							((roll1 >= dcConfig.difficulty && !roll2) ||
-								(roll1 < dcConfig.difficulty && roll2 >= dcConfig.difficulty)) &&
-							dcConfig.successAudio
-						) {
-							await soundPlayer.play(dcConfig.successAudio);
-						} else if ((roll1 === 1 || roll2 === 1) && dcConfig.nat1Audio) {
-							await soundPlayer.play(dcConfig.nat1Audio);
-						} else if (roll1 < dcConfig.difficulty && roll2 < dcConfig.difficulty && dcConfig.failureAudio) {
-							await soundPlayer.play(dcConfig.failureAudio);
-						}
-
-						break;
-					}
-
-					case DCType.disadvantage: {
-						if (roll1 === 20 && roll2 === 20 && dcConfig.nat20Audio) {
-							await soundPlayer.play(dcConfig.nat20Audio);
-						} else if (roll1 >= dcConfig.difficulty && roll2 >= dcConfig.difficulty && dcConfig.successAudio) {
-							await soundPlayer.play(dcConfig.successAudio);
-						} else if ((roll1 === 1 || roll2 === 1) && dcConfig.nat1Audio) {
-							await soundPlayer.play(dcConfig.nat1Audio);
-							rolls = [];
-						} else if (
-							((roll1 < dcConfig.difficulty && !roll2) ||
-								(roll1 >= dcConfig.difficulty && roll2 < dcConfig.difficulty)) &&
-							dcConfig.failureAudio
-						) {
-							await soundPlayer.play(dcConfig.failureAudio);
-						}
-
-						break;
-					}
-				}
-			}
-		},
-	});
 };
 
 export const wait = async (ms: number) => {
