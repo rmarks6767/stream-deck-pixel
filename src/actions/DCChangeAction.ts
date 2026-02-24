@@ -1,12 +1,10 @@
 import streamDeck, { action, DidReceiveSettingsEvent, KeyDownEvent, SingletonAction, WillAppearEvent } from "@elgato/streamdeck";
-import { DisplayActionBaseSettings } from "./DisplayActionBase";
 import { dcActionManifestId } from "./DCAction";
 import { EventBus } from "../common/eventBus";
 import { EventType } from "../common/eventBus.types";
 
-type DCChangeSettings = DisplayActionBaseSettings & {
+type DCChangeSettings = {
 	type: "minus" | "plus";
-	targetedActionIds?: string[];
 };
 
 @action({ UUID: "com.river.pixeldie.dcchange" })
@@ -37,24 +35,14 @@ export class DCChangeAction extends SingletonAction<DCChangeSettings> {
 		];
 
 		const targetedActions = streamDeck.actions.filter((action) => {
-			console.log(action);
-			
-			if (ev.payload.settings.targetedActionIds?.includes(action.id)) {
-				return true;
-			}
-
 			if (action.manifestId !== dcActionManifestId || !action.coordinates) {
 				return false;
 			}
 
-			const possibleCoord = `${action.coordinates.column}:${action.coordinates.row}`
+			const column = action.coordinates.column;
+			const row = action.coordinates.row;
 			
-			console.log(possibleCoord);
-			if (possibleCoords.includes(possibleCoord)) {
-				return true;
-			}
-
-			return false;
+			return possibleCoords.includes(`${column}:${row}`);
 		});
 
 

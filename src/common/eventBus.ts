@@ -10,6 +10,7 @@ export class EventBus {
 		[EventType.PixelBattery]:new Map(),
 		[EventType.PixelConnect]: new Map(),
 		[EventType.PixelDisconnect]: new Map(),
+		[EventType.PixelRemove]: new Map(),
 		[EventType.Settings]: new Map(),
 	};
 

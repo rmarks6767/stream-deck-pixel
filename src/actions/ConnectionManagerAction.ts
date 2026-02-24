@@ -6,11 +6,13 @@ import streamDeck, {
 	SendToPluginEvent,
 	SingletonAction,
 	WillAppearEvent,
+	WillDisappearEvent,
 } from "@elgato/streamdeck";
 import { JsonObject } from "@elgato/utils";
-import { DCType, GlobalSettings, Pixel, PixelConnectionState } from "../common/types";
-import { PixelManager } from "../common/pixelManager";
+
 import { GlobalSettingsController } from "../common/globalSettingsController";
+import { PixelManager } from "../common/pixelManager";
+import { GlobalSettings, Pixel, PixelConnectionState } from "../common/types";
 import { setConnectionStatus, wait } from "../common/utils";
 
 const defaultSettings: ConnectionManagerActionSettings = {
@@ -22,7 +24,7 @@ export interface ConnectionManagerActionSettings extends JsonObject {
 }
 
 interface PluginEvent extends JsonObject {
-	event: 'clearAllDevices' | "connectDevice" | "deleteDevice" | "reconnectDevice";
+	event: "clearAllDevices" | "connectDevice" | "deleteDevice" | "reconnectDevice";
 	deviceId: string;
 }
 
@@ -36,7 +38,9 @@ export class ConnectionManagerAction extends SingletonAction<ConnectionManagerAc
 		this._pixelManager = pixelManager;
 	}
 
-	public override async onDidReceiveSettings(ev: DidReceiveSettingsEvent<ConnectionManagerActionSettings>): Promise<void> {
+	public override async onDidReceiveSettings(
+		ev: DidReceiveSettingsEvent<ConnectionManagerActionSettings>,
+	): Promise<void> {
 		await streamDeck.ui.sendToPropertyInspector({
 			event: "getDiscoveredDevices",
 			discoveredDevices: ev.payload.settings.discoveredDevices,
@@ -49,17 +53,16 @@ export class ConnectionManagerAction extends SingletonAction<ConnectionManagerAc
 		const { connectedDevices } = await GlobalSettingsController.get();
 		const { discoveredDevices } = await ev.action.getSettings();
 
-		GlobalSettingsController.addListener(ev.action.id, async ({ connectedDevices }) => {
+		GlobalSettingsController.addListener(`${ev.action.id}:propertyInspector`, async ({ connectedDevices }) => {
 			await streamDeck.ui.sendToPropertyInspector({
 				event: "getKnownDevices",
 				knownDevices: Object.values(connectedDevices),
 			});
-		})
+		});
 
 		await this._pixelManager.discoverDevices(async (id, name) => {
 			const localSettings = await ev.action.getSettings();
 			const { connectedDevices } = await GlobalSettingsController.get();
-
 
 			if (localSettings.discoveredDevices.find((device: Pixel) => device.id === id) || connectedDevices[id]) {
 				return;
@@ -71,10 +74,6 @@ export class ConnectionManagerAction extends SingletonAction<ConnectionManagerAc
 					id,
 					name,
 					connectionState: PixelConnectionState.DISCONNECTED,
-					dcConfig: {
-						type: DCType.standard,
-						difficulty: 10,
-					}
 				},
 			];
 
@@ -100,10 +99,12 @@ export class ConnectionManagerAction extends SingletonAction<ConnectionManagerAc
 	): Promise<void> {
 		await ev.action.setSettings(defaultSettings);
 		await this._pixelManager.stopDiscover();
-		GlobalSettingsController.removeListener(ev.action.id);
+		GlobalSettingsController.removeListener(`${ev.action.id}:propertyInspector`);
 	}
 
-	public override async onSendToPlugin(ev: SendToPluginEvent<PluginEvent, ConnectionManagerActionSettings>): Promise<void> {
+	public override async onSendToPlugin(
+		ev: SendToPluginEvent<PluginEvent, ConnectionManagerActionSettings>,
+	): Promise<void> {
 		switch (ev.payload.event) {
 			case "connectDevice":
 				await this.connectToDevice(ev);
@@ -123,7 +124,14 @@ export class ConnectionManagerAction extends SingletonAction<ConnectionManagerAc
 	public override async onWillAppear(ev: WillAppearEvent<ConnectionManagerActionSettings>): Promise<void> {
 		if (!ev.payload.settings.type) {
 			await ev.action.setSettings<ConnectionManagerActionSettings>(defaultSettings);
-		}
+		} 
+
+		GlobalSettingsController.addListener(`${ev.action.id}:willAppear`, this.globalSettingsListener(ev));
+		await this.globalSettingsListener(ev)(await GlobalSettingsController.get());
+	}
+
+	public override onWillDisappear(ev: WillDisappearEvent<ConnectionManagerActionSettings>): void {
+		GlobalSettingsController.removeListener(`${ev.action.id}:willAppear`);
 	}
 
 	private async clearAllDevices(ev: SendToPluginEvent<PluginEvent, ConnectionManagerActionSettings>) {
@@ -133,11 +141,11 @@ export class ConnectionManagerAction extends SingletonAction<ConnectionManagerAc
 	}
 
 	private async connect(device: Pixel, retry = 0) {
-		await setConnectionStatus(device, PixelConnectionState.CONNECTING)
+		await setConnectionStatus(device, PixelConnectionState.CONNECTING);
 
 		try {
 			await this._pixelManager.connect(device.id);
-			await setConnectionStatus(device, PixelConnectionState.CONNECTED)
+			await setConnectionStatus(device, PixelConnectionState.CONNECTED);
 		} catch (error) {
 			if (retry < 3) {
 				await wait(retry * 1000);
@@ -146,11 +154,11 @@ export class ConnectionManagerAction extends SingletonAction<ConnectionManagerAc
 			}
 
 			streamDeck.logger.error({
-				message: `Failed to reconnect to device: ${device.id}`, 
-				error
+				message: `Failed to reconnect to device: ${device.id}`,
+				error,
 			});
 
-			await setConnectionStatus(device, PixelConnectionState.DISCONNECTED)
+			await setConnectionStatus(device, PixelConnectionState.DISCONNECTED);
 		}
 	}
 
@@ -172,9 +180,9 @@ export class ConnectionManagerAction extends SingletonAction<ConnectionManagerAc
 
 		// Clear the device from the discovered devices
 		await ev.action.setSettings({
-			...localSettings, 
+			...localSettings,
 			discoveredDevices: localSettings.discoveredDevices.filter(({ id }) => id !== deviceId),
-		})
+		});
 		await ev.action.getSettings();
 		await this.connect(device);
 	}
@@ -184,9 +192,9 @@ export class ConnectionManagerAction extends SingletonAction<ConnectionManagerAc
 
 		await this._pixelManager.disconnect(deviceId);
 
-		const newConnectedDevices: GlobalSettings['connectedDevices'] = {};
+		const newConnectedDevices: GlobalSettings["connectedDevices"] = {};
 		Object.entries(globalSettings.connectedDevices).forEach(([key, value]) => {
-			if(key !== deviceId) {
+			if (key !== deviceId) {
 				newConnectedDevices[key] = value;
 			}
 		});
@@ -195,6 +203,29 @@ export class ConnectionManagerAction extends SingletonAction<ConnectionManagerAc
 			...globalSettings,
 			connectedDevices: newConnectedDevices,
 		});
+	}
+
+	private globalSettingsListener(
+		ev: WillAppearEvent<ConnectionManagerActionSettings>,
+	): (settings: GlobalSettings) => Promise<void> {
+		let lastNumDevices: number = -1;
+	
+		return async ({ connectedDevices }) => {
+			console.log('Received settings', { connectedDevices });
+
+			const numDevices = Object.keys(connectedDevices).length;
+
+			if (numDevices !== lastNumDevices) {
+				await ev.action.setTitle(`${numDevices} Device${numDevices !== 1 ? 's' : ''}\nConnected`);
+
+				lastNumDevices = numDevices;
+			}
+
+			await streamDeck.ui.sendToPropertyInspector({
+				event: "getKnownDevices",
+				knownDevices: Object.values(connectedDevices),
+			});
+		}
 	}
 
 	private async reconnectToDevice(deviceId: string) {

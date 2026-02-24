@@ -1,13 +1,13 @@
 import streamDeck from "@elgato/streamdeck";
+
 import { GlobalSettings } from "./types";
 
 export const defaultGlobalSettings: GlobalSettings = {
-	actions: {},
 	connectedDevices: {},
 };
 
 export class GlobalSettingsController {
-	private static listeners: Map<string, (event: GlobalSettings) => Promise<void> | void> = new Map()
+	private static listeners: Map<string, (event: GlobalSettings) => Promise<void> | void> = new Map();
 
 	public static addListener(actionId: string, listener: (event: GlobalSettings) => Promise<void> | void): void {
 		this.listeners.set(actionId, listener);
@@ -28,6 +28,8 @@ export class GlobalSettingsController {
 	public static async set(settings: GlobalSettings): Promise<void> {
 		await streamDeck.settings.setGlobalSettings(settings);
 
-		this.listeners.forEach((listener) => listener(settings))
+		console.log("Fanning out settings to listeners", { settings, listeners: this.listeners });
+
+		this.listeners.forEach((listener) => listener(settings));
 	}
 }

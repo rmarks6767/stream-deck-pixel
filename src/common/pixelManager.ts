@@ -1,5 +1,5 @@
 import noble, { Peripheral } from "@stoprocent/noble";
-import { serializer } from "@systemic-games/pixels-web-connect";
+import { IAmADie, LegacyIAmADie, serializer } from "@systemic-games/pixels-web-connect";
 
 import { PixelBluetoothConfig } from "./types";
 import { EventBus } from "./eventBus";
@@ -14,6 +14,9 @@ const knownDevices = [
 	"D4",
 ];
 
+const notifyUUID = '6e400001b5a3f393e0a9e50e24dcca9e';
+const writeUUID = '6e400002b5a3f393e0a9e50e24dcca9e';
+
 export class PixelManager {
 	private _devices: Map<string, PixelBluetoothConfig> = new Map();
 
@@ -26,10 +29,16 @@ export class PixelManager {
 
 			console.log(`[PixelManager.connect]: Connected to device ${id}`, { peripheral });
 
-			const { characteristics } = await peripheral.discoverAllServicesAndCharacteristicsAsync();
+			// peripheral.discoverAllServicesAndCharacteristics((err, services, chars) => {
+			// 	console.log('River look: ', { err, services, chars });
+			// })
 
-			const notify = characteristics.find(({ properties }) => properties?.includes?.("notify"));
-			const write = characteristics.find(({ properties }) => properties?.includes?.("write"));
+			const { characteristics } = await peripheral.discoverSomeServicesAndCharacteristicsAsync([], [writeUUID, notifyUUID]);
+
+			const notify = characteristics.find(({ uuid }) => uuid === notifyUUID);
+			const write = characteristics.find(({ uuid }) => uuid === writeUUID);
+
+			console.log('Here are the characteristics river: ', { characteristics });
 
 			if (!notify || !write) {
 				console.error(`[PixelManager.connect]: Required Characteristics not found for device ${id}`, {
@@ -41,6 +50,8 @@ export class PixelManager {
 			}
 
 			await notify.subscribeAsync();
+
+			const whoAmIInterval = setInterval(() => write.write(Buffer.from([1]), true), 30_000);
 
 			const device = {
 				id,
@@ -54,6 +65,24 @@ export class PixelManager {
 				const message = serializer.deserializeMessage(dataView);
 				const messageType = serializer.getMessageType(message);
 
+				console.log('Message received: ', { message, messageType })
+
+				if (messageType === 'iAmADie') {
+					const { 
+						batteryLevelPercent, 
+						batteryState,
+					} = message as IAmADie & LegacyIAmADie;
+
+					await EventBus.emit(EventType.PixelBattery, {
+						id,
+						event: {
+							type: 2,
+							state: batteryState,
+							levelPercent: batteryLevelPercent
+						} as BatteryEvent
+					});
+				}
+
 				if (messageType === 'rollState') {
 					await EventBus.emit(EventType.PixelRoll, {
 						id,
@@ -61,16 +90,18 @@ export class PixelManager {
 					});
 				}
 
-				if ( messageType === "batteryLevel") {
-					await EventBus.emit(EventType.PixelBattery, {
-						id,
-						event: message as BatteryEvent
-					});
-				}
+				// if ( messageType === "batteryLevel") {
+				// 	await EventBus.emit(EventType.PixelBattery, {
+				// 		id,
+				// 		event: message as BatteryEvent
+				// 	});
+				// }
 			});
 
 			peripheral.on('disconnect', async () => {
+				console.log('Disconnecting and clearing interval')
 				await this.disconnect(id);
+				clearInterval(whoAmIInterval);
 			});
 
 			console.log(`[PixelManager.connect]: Subscribed to notify event for device ${id}`, { device });

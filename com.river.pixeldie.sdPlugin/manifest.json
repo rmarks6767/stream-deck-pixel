@@ -1,7 +1,7 @@
 {
     "Name": "Pixel Dice",
     "Version": "0.1.0.0",
-    "Author": "River",
+    "Author": "River Marks",
     "Actions": [
         {
             "Name": "Connection Manager",
@@ -32,7 +32,7 @@
             ],
             "States": [
                 {
-                    "Image": "imgs/actions/counter/key",
+                    "Image": "imgs/actions/d20",
                     "TitleAlignment": "middle"
                 }
             ]
@@ -51,15 +51,15 @@
             "DisableAutomaticStates": true,
             "States": [
                 {
-                    "Image": "imgs/actions/standard",
+                    "Image": "imgs/actions/d20_flat",
                     "TitleAlignment": "middle"
                 },
                 {
-                    "Image": "imgs/actions/advantage",
+                    "Image": "imgs/actions/d20_adv",
                     "TitleAlignment": "middle"
                 },
                 {
-                    "Image": "imgs/actions/disadvantage",
+                    "Image": "imgs/actions/d20_dis",
                     "TitleAlignment": "middle"
                 }
             ]
@@ -107,7 +107,7 @@
     "Category": "Pixel Dice",
     "CategoryIcon": "imgs/plugin/category-icon",
     "CodePath": "bin/plugin.js",
-    "Description": "Stream Deck Pixel Dice integration for running multi-actions, setting DCs, and interacting with the Pixel Die ",
+    "Description": "Stream Deck Pixel Dice integration for viewing information, setting DCs, and interacting with bluetooth dice",
     "Icon": "imgs/plugin/marketplace",
     "SDKVersion": 2,
     "Software": {

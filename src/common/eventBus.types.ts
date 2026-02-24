@@ -5,6 +5,7 @@ export enum EventType {
     PixelBattery = 'PIXEL_BATTERY',
     PixelDisconnect = 'PIXEL_DISCONNECT',
     PixelConnect = 'PIXEL_CONNECT',
+    PixelRemove = 'PIXEL_REMOVE',
     Settings = 'SETTINGS',
 }
 
@@ -26,6 +27,10 @@ export interface PixelConnectEvent {
     id: string;
 }
 
+export interface PixelRemoveEvent {
+    id: string;
+}
+
 export type SettingsUpdateEvent<T = unknown> = Partial<T>;
 
 export interface EventMap {
@@ -33,6 +38,7 @@ export interface EventMap {
     [EventType.PixelBattery]: PixelBatteryEvent;
     [EventType.PixelDisconnect]: PixelDisconnectEvent;
     [EventType.PixelConnect]: PixelDisconnectEvent;
+    [EventType.PixelRemove]: PixelRemoveEvent;
     [EventType.Settings]: SettingsUpdateEvent;
 }
 

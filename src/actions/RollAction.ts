@@ -2,8 +2,7 @@ import { action, DidReceiveSettingsEvent, WillAppearEvent, WillDisappearEvent } 
 import { PixelManager } from "../common/pixelManager";
 import { DisplayActionBase, DisplayActionBaseSettings } from "./DisplayActionBase";
 import { EventBus } from "../common/eventBus";
-import { EventType } from "../common/eventBus.types";
-import { wait } from "../common/utils";
+import { EventType, PixelRollEvent } from "../common/eventBus.types";
 
 @action({ UUID: "com.river.pixeldie.roll" })
 export class RollAction extends DisplayActionBase {
@@ -20,58 +19,38 @@ export class RollAction extends DisplayActionBase {
 	}
 
 	public override async onWillDisappear(ev: WillDisappearEvent<DisplayActionBaseSettings>): Promise<void> {
+		super.onWillDisappear(ev);
 		this.removeListeners(ev.action.id);
 	}
 
-	private async addListeners(ev: DidReceiveSettingsEvent<DisplayActionBaseSettings> | WillAppearEvent<DisplayActionBaseSettings>) {
-		if (!ev.payload.settings.deviceId) {
-			await ev.action.showAlert();
-			await ev.action.setTitle('No\nDevice');
-			this.removeListeners(ev.action.id);
-			
-			return;
-		}
+	protected override async addListeners(ev: DidReceiveSettingsEvent<DisplayActionBaseSettings> | WillAppearEvent<DisplayActionBaseSettings>) {
+		await super.addListeners(ev, ev.type === 'didReceiveSettings');
 		
 		EventBus.subscribe({
 			id: ev.action.id,
 			type: EventType.PixelRoll,
 			subscribeTo: ev.payload.settings.deviceId,
-			listener: async ({ event: { faceIndex, state } }) => {
-				if (state === 1) {
-					await ev.action.setTitle(`${faceIndex + 1}`);
-				}
-
-				if (state === 3) {
-					await ev.action.setTitle('Rolling...');
-				}
-			},
-		});
-
-		EventBus.subscribe({
-			id: ev.action.id,
-			type: EventType.PixelDisconnect,
-			subscribeTo: ev.payload.settings.deviceId,
-			listener: async () => {
-				await ev.action.showAlert();
-				await ev.action.setTitle('No\nDevice');
-			},
-		});
-
-		EventBus.subscribe({
-			id: ev.action.id,
-			type: EventType.PixelConnect,
-			subscribeTo: ev.payload.settings.deviceId,
-			listener: async () => {
-				await ev.action.setTitle('Device\nConnected');
-				await wait(1_000);
-				await ev.action.setTitle('D20');
-			},
+			listener: this.pixelListener(ev),
 		});
 	}
+	
+	protected override async removeListeners(id: string) {
+		EventBus.unsubscribe(EventType.PixelRoll, id);
+	}
 
-	private async removeListeners(id: string) {
-		EventBus.unsubscribe(EventType.PixelBattery, id);
-		EventBus.unsubscribe(EventType.PixelConnect, id);
-		EventBus.unsubscribe(EventType.PixelDisconnect, id);
+	private pixelListener(ev: DidReceiveSettingsEvent<DisplayActionBaseSettings> | WillAppearEvent<DisplayActionBaseSettings>) {
+		let rollingTitle: string = "[: ]";
+		return async ({ event: { faceIndex, state } }: PixelRollEvent) => {
+			switch(state) {
+				case 1: 
+					await ev.action.setTitle(`${faceIndex + 1}`);
+					break;
+				case 3: 
+					await ev.action.setTitle(rollingTitle);
+
+					rollingTitle = rollingTitle === "[: ]" ? "[ :]" : "[: ]";
+					break;
+			}
+		}
 	}
 }
