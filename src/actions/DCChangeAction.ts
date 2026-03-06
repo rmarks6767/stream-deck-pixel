@@ -66,6 +66,6 @@ export class DCChangeAction extends SingletonAction<DCChangeSettings> {
 		
 		const { settings } = ev.payload;
 
-		await ev.action.setImage(settings.type === "plus" ? "imgs/actions/plus" : "imgs/actions/minus");
+		await ev.action.setImage(settings.type === "plus" ? "imgs/plus" : "imgs/minus");
 	}
 }

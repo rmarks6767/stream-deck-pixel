@@ -216,7 +216,7 @@ export class ConnectionManagerAction extends SingletonAction<ConnectionManagerAc
 			const numDevices = Object.keys(connectedDevices).length;
 
 			if (numDevices !== lastNumDevices) {
-				await ev.action.setTitle(`${numDevices} Device${numDevices !== 1 ? 's' : ''}\nConnected`);
+				await ev.action.setTitle(`${numDevices} ${numDevices !== 1 ? 'Dice' : 'Die'}\nConfiged`);
 
 				lastNumDevices = numDevices;
 			}

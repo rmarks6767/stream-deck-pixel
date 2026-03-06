@@ -248,13 +248,13 @@ export class DCAction extends DisplayActionBase<DCSettings> {
 
 		switch (type) {
 			case DCType.Standard:
-				await ev.action.setImage("imgs/actions/d20_flat");
+				await ev.action.setImage("imgs/d20_flat");
 				break;
 			case DCType.Advantage:
-				await ev.action.setImage("imgs/actions/d20_adv");
+				await ev.action.setImage("imgs/d20_adv");
 				break;
 			case DCType.Disadvantage:
-				await ev.action.setImage("imgs/actions/d20_dis");
+				await ev.action.setImage("imgs/d20_dis");
 		}
 	}
 }

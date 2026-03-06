@@ -49,15 +49,15 @@ export class BatteryAction extends DisplayActionBase {
 		console.info(`[DCAction.setImage]: Event Received`, { event: ev });
 	
 		if (percentage > 75) {
-			await ev.action.setImage("imgs/actions/battery_100");
+			await ev.action.setImage("imgs/battery_100");
 		} else if (percentage <= 75 && percentage > 50) {
-			await ev.action.setImage("imgs/actions/battery_75");
+			await ev.action.setImage("imgs/battery_75");
 		} else if (percentage <= 50 && percentage > 25) {
-			await ev.action.setImage("imgs/actions/battery_50");
+			await ev.action.setImage("imgs/battery_50");
 		} else if (percentage <= 25 && percentage > 10) {
-			await ev.action.setImage("imgs/actions/battery_25");
+			await ev.action.setImage("imgs/battery_25");
 		} else {
-			await ev.action.setImage("imgs/actions/battery_10");
+			await ev.action.setImage("imgs/battery_10");
 		}
 	}
 }
