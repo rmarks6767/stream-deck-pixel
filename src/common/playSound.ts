@@ -1,10 +1,9 @@
 import { execSync, spawn } from "child_process";
-import {platform} from 'os';
+import { platform } from 'os';
 
 function simpleQuote(args: string[]): string {
 	return args
 		.map((arg) => {
-			// Escape single quotes by closing, adding \' and reopening quotes
 			if (/[^A-Za-z0-9_/:=-]/.test(arg)) {
 				return `'${arg.replace(/'/g, `'\\''`)}'`;
 			}
@@ -15,7 +14,7 @@ function simpleQuote(args: string[]): string {
 
 function isExec(command: string): boolean {
 	try {
-		execSync(simpleQuote(command.split(' ')), {stdio: 'ignore'});
+		execSync(simpleQuote(command.split(' ')), { stdio: 'ignore' });
 		return true;
 	} catch {
 		return false;
@@ -41,17 +40,17 @@ function findExec(...commands: string[]): string | null {
 }
 
 const availablePlayers = [
+	"ffplay",
 	"mplayer",
-	"afplay",
 	"mpg123",
 	"mpg321",
 	"play",
-	"omxplayer",
 	"aplay",
 	"cmdmp3",
 	"cvlc",
+	"afplay",
+	"omxplayer",
 	"powershell",
-	"ffplay",
 ] as const;
 
 type AvailablePlayer = (typeof availablePlayers)[number];
@@ -74,6 +73,17 @@ type PlayMethodOptions = Partial<
 	}
 >;
 
+const defaultPlayerArgs: Partial<Record<AvailablePlayer, string[]>> = {
+	powershell: [
+		"-NoProfile",
+		"-NonInteractive",
+		"-Command",
+	],
+	mplayer: ["-really-quiet", "-nolirc"],
+	afplay: [],
+	ffplay: ["-nodisp", "-autoexit", "-loglevel", "quiet"],
+};
+
 export class Player {
 	#opts: PlayOpts;
 
@@ -81,41 +91,52 @@ export class Player {
 		this.#opts = Object.assign({}, defaultOptions, opts);
 	}
 
-	public play(what: string, options: PlayMethodOptions = {}): Promise<void> {
-		return new Promise((resolve, reject) => {
-			const args = Array.isArray(options[this.#opts.player])
-				? options[this.#opts.player]!.concat(what).map(String)
-				: [what];
-
+	public async play(what: string, options: PlayMethodOptions = {}): Promise<void> {
+		const promise = new Promise<void>((resolve, reject) => {
 			if (!this.#opts.player) {
-				return reject("Couldn't find a suitable audio player");
+				return reject(new Error("Couldn't find a suitable audio player"));
 			}
 
-			const process = spawn(this.#opts.player, args);
+			let args: string[];
 
-			if (!process) {
-				return reject("Unable to spawn process with " + this.#opts.player);
+			if (this.#opts.player === "powershell") {
+				const escaped = what.replace(/'/g, "''");
+				const isWav = what.toLowerCase().endsWith('.wav');
+    
+				const command = isWav
+					? `(New-Object Media.SoundPlayer '${escaped}').PlaySync()`
+					: `$p = New-Object -ComObject WMPlayer.OCX; $p.URL = '${escaped}'; $p.controls.play(); Start-Sleep -s ($p.currentMedia.duration + 1)`;
+    
+				args = ["-NoProfile", "-NonInteractive", "-Command", command];
+			} else if (Array.isArray(options[this.#opts.player])) {
+				args = options[this.#opts.player]!.concat(what).map(String);
+			} else {
+				const defaults = defaultPlayerArgs[this.#opts.player] ?? [];
+				args = [...defaults, what];
 			}
 
-			process.on("close", (code, signal) => {
+			const child = spawn(this.#opts.player, args);
+
+			child.on("close", (code, signal) => {
 				if (code === 0) {
-					// The audio played successfully and the process exited normally
 					resolve();
+				} else if (signal) {
+					reject(new Error("Audio playback was interrupted"));
 				} else {
-					// If the process ended with an error or was killed
-					if (signal) {
-						// Process was killed by a signal (like 'SIGTERM' or 'SIGKILL')
-						reject(new Error("Audio playback was interrupted"));
-					} else {
-						// Some error occurred with the command
-						reject(new Error(`Audio playback failed with exit code ${code}`));
-					}
+					reject(new Error(`Audio playback failed with exit code ${code}`));
 				}
 			});
-			process.on("error", (err) => {
+
+			child.on("error", (err) => {
 				reject(new Error(`Failed to start audio playback: ${err.message}`));
 			});
 		});
+
+		try {
+			await promise;
+		} catch (err) {
+			console.error("Error playing sound:", err);
+		}
 	}
 }
 

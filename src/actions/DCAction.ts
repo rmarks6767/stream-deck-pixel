@@ -1,4 +1,4 @@
-import { action, DidReceiveSettingsEvent, KeyDownEvent, WillAppearEvent, WillDisappearEvent } from "@elgato/streamdeck";
+import streamDeck, { action, DidReceiveSettingsEvent, KeyDownEvent, WillAppearEvent, WillDisappearEvent } from "@elgato/streamdeck";
 import z from "zod";
 
 import { EventBus } from "../common/eventBus";
@@ -23,6 +23,7 @@ const Settings = z.object({
 	nat1Audio: z.string().default(""),
 	successAudio: z.string().default(""),
 	failureAudio: z.string().default(""),
+	isDisabled: z.boolean().default(false),
 });
 
 type DCSettings = z.infer<typeof Settings>;
@@ -99,19 +100,26 @@ export class DCAction extends DisplayActionBase<DCSettings> {
 			},
 		} as typeof ev;
 
-		await super.addListeners(
-			newEv,
-			settings.deviceId !== settings.previousDeviceId,
-		);
+		streamDeck.logger.debug(`[DCChangeAction.updateDifficultyDisplay]: Event Received`, { event: ev });
+
+		await super.addListeners(newEv, settings.deviceId !== settings.previousDeviceId);
 
 		EventBus.subscribe({
 			id: ev.action.id,
 			type: EventType.Settings,
 			listener: async (event: Partial<DCSettings>) => {
-				await ev.action.setSettings({
-					...settings,
-					difficulty: settings.difficulty + event.difficulty!,
-				});
+				if (event.difficulty !== undefined) {
+					await ev.action.setSettings({
+						...settings,
+						difficulty: settings.difficulty + event.difficulty,
+					});
+				} else if (event.isDisabled !== undefined) {
+					await ev.action.setSettings({
+						...settings,
+						isDisabled: event.isDisabled,
+					});
+				}
+
 				await ev.action.getSettings();
 			},
 		});
@@ -152,11 +160,17 @@ export class DCAction extends DisplayActionBase<DCSettings> {
 	private pixelListener(
 		ev: DidReceiveSettingsEvent<DCSettings> | KeyDownEvent<DCSettings> | WillAppearEvent<DCSettings>,
 	) {
-		const { type, difficulty, nat20Audio, successAudio, failureAudio, nat1Audio } = Settings.parse(ev.payload.settings);
+		const { type, difficulty, nat20Audio, successAudio, failureAudio, nat1Audio, isDisabled } = Settings.parse(
+			ev.payload.settings,
+		);
 
 		let rolls: number[] = [];
 		let rollingTitle: string = ": ";
 		return async ({ event }: PixelRollEvent) => {
+			if (isDisabled !== undefined && isDisabled) {
+				return;
+			}
+
 			if (event.state === 1) {
 				if (rolls.length === 2 || type === DCType.Standard) {
 					rolls = [];

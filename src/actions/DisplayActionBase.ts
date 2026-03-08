@@ -89,38 +89,6 @@ export class DisplayActionBase<T extends JsonObject = JsonObject> extends Single
 		} catch(error) {
 			console.error(error);
 		}
-		
-		// EventBus.subscribe({
-		// 	id: ev.action.id,
-		// 	type: EventType.PixelDisconnect,
-		// 	subscribeTo: settings.deviceId,
-		// 	listener: async () => {
-		// 		await ev.action.showAlert();
-		// 		await ev.action.setTitle("Device\nDis-\nConnected");
-		// 	},
-		// });
-
-		// const globalSettings = await GlobalSettingsController.get();
-		// const device = globalSettings.connectedDevices[settings.deviceId];
-
-		// if (device && device.connectionState === PixelConnectionState.DISCONNECTED) {
-		// 	await ev.action.setTitle("Device\nNot\nConnected");
-
-		// 	EventBus.subscribe({
-		// 		id: ev.action.id,
-		// 		type: EventType.PixelConnect,
-		// 		subscribeTo: settings.deviceId,
-		// 		listener: async () => {
-		// 			await ev.action.setTitle("Device\nFound");
-		// 			await wait(2_000);
-		// 			await ev.action.setTitle(settings.defaultTitle || device.name);
-		// 		},
-		// 	});
-		// } else if (ev.type === 'willAppear') {
-		// 	await ev.action.setTitle("Device\nFound");
-		// 	await wait(2_000);
-		// 	await ev.action.setTitle(settings.defaultTitle || device.name);
-		// }
 	}
 
 	protected removeListeners(id: string) {

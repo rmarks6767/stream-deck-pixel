@@ -4,7 +4,7 @@ import { EventBus } from "../common/eventBus";
 import { EventType } from "../common/eventBus.types";
 
 type DCChangeSettings = {
-	type: "minus" | "plus";
+	type?: "minus" | "plus";
 };
 
 @action({ UUID: "com.river.pixeldie.dcchange" })
@@ -62,9 +62,13 @@ export class DCChangeAction extends SingletonAction<DCChangeSettings> {
 	}
 
 	private async updateDisplay(ev: DidReceiveSettingsEvent<DCChangeSettings> | WillAppearEvent<DCChangeSettings>): Promise<void> {
-		console.info(`[DCChangeAction.updateDifficultyDisplay]: Event Received`, { event: ev });
-		
+		streamDeck.logger.debug(`[DCChangeAction.updateDifficultyDisplay]: Event Received`, { event: ev });
+
 		const { settings } = ev.payload;
+
+		if (!settings.type) {
+			return;
+		}
 
 		await ev.action.setImage(settings.type === "plus" ? "imgs/plus" : "imgs/minus");
 	}
