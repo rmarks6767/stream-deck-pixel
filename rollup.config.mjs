@@ -14,7 +14,7 @@ const sdPlugin = "com.river.pixeldie.sdPlugin";
  */
 const config = {
 	input: "src/plugin.ts",
-	external: ['@stoprocent/noble', '@stoprocent/bluetooth-hci-socket', '@systemic-games/pixels-core-connect', '@systemic-games/pixels-web-connect', '@vdegenne/play-sound'],
+	external: ['@stoprocent/noble'],
 	output: {
 		file: `${sdPlugin}/bin/plugin.js`,
 		sourcemap: isWatching,

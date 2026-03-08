@@ -2,7 +2,7 @@ import streamDeck from "@elgato/streamdeck";
 
 import { GlobalSettings } from "./types";
 
-export const defaultGlobalSettings: GlobalSettings = {
+const defaultGlobalSettings: GlobalSettings = {
 	connectedDevices: {},
 };
 
@@ -14,6 +14,13 @@ export class GlobalSettingsController {
 	}
 
 	public static async get(): Promise<GlobalSettings> {
+		const globalSettings = await streamDeck.settings.getGlobalSettings<GlobalSettings>();
+
+		if (!globalSettings || globalSettings?.connectedDevices === undefined) {
+			await this.set(defaultGlobalSettings);
+			return defaultGlobalSettings;
+		}
+
 		return await streamDeck.settings.getGlobalSettings<GlobalSettings>();
 	}
 
@@ -27,8 +34,6 @@ export class GlobalSettingsController {
 
 	public static async set(settings: GlobalSettings): Promise<void> {
 		await streamDeck.settings.setGlobalSettings(settings);
-
-		console.log("Fanning out settings to listeners", { settings, listeners: this.listeners });
 
 		this.listeners.forEach((listener) => listener(settings));
 	}

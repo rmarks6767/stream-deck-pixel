@@ -1,7 +1,6 @@
 import { PixelManager } from "./pixelManager";
-// import { soundPlayer } from "../playSound";
 import { Pixel, PixelConnectionState } from "./types";
-import { defaultGlobalSettings, GlobalSettingsController } from "./globalSettingsController";
+import { GlobalSettingsController } from "./globalSettingsController";
 import streamDeck from "@elgato/streamdeck";
 
 export 	const setConnectionStatus = async (device: Pixel, connectionState: PixelConnectionState) => {
@@ -26,13 +25,7 @@ export 	const setConnectionStatus = async (device: Pixel, connectionState: Pixel
  * @param pixelManager - An instance of the PixelManager class
  */
 export const startup = async (pixelManager: PixelManager) => {
-	let settings = await GlobalSettingsController.get();
-
-	// Initial creation of the settings object
-	if (!settings) {
-		settings = defaultGlobalSettings;
-		await GlobalSettingsController.set(settings);
-	}
+	const settings = await GlobalSettingsController.get();
 
 	await Promise.all(
 		Object.entries(settings.connectedDevices).map(async ([deviceId, device]) => {

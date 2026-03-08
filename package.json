@@ -1,8 +1,9 @@
 {
     "scripts": {
-        "build": "rollup -c",
+        "build": "rollup -c && cd com.river.pixeldie.sdPlugin && npm install --omit=dev && cd ..",
         "watch": "rollup -c -w --watch.onEnd=\"streamdeck restart com.river.pixeldie\"",
-        "lint": "eslint --max-warnings 0 --fix"
+        "lint": "eslint --max-warnings 0 --fix",
+        "pack": "npm run build && rm com.river.pixeldie.streamDeckPlugin && streamdeck pack com.river.pixeldie.sdPlugin"
     },
     "type": "module",
     "devDependencies": {

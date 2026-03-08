@@ -1,3 +1,5 @@
+import "reflect-metadata";
+
 import streamDeck from "@elgato/streamdeck";
 import { PixelManager } from "./common/pixelManager";
 import { startup } from "./common/utils";

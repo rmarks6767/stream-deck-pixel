@@ -1,5 +1,5 @@
 import noble, { Peripheral } from "@stoprocent/noble";
-import { IAmADie, LegacyIAmADie, serializer } from "@systemic-games/pixels-web-connect";
+import { LegacyIAmADie, serializer } from "./pixelSerializer";
 
 import { PixelBluetoothConfig } from "./types";
 import { EventBus } from "./eventBus";
@@ -28,10 +28,6 @@ export class PixelManager {
 			const peripheral = await noble.connectAsync(id, { timeout: 10000 });
 
 			console.log(`[PixelManager.connect]: Connected to device ${id}`, { peripheral });
-
-			// peripheral.discoverAllServicesAndCharacteristics((err, services, chars) => {
-			// 	console.log('River look: ', { err, services, chars });
-			// })
 
 			const { characteristics } = await peripheral.discoverSomeServicesAndCharacteristicsAsync([], [writeUUID, notifyUUID]);
 
@@ -65,13 +61,11 @@ export class PixelManager {
 				const message = serializer.deserializeMessage(dataView);
 				const messageType = serializer.getMessageType(message);
 
-				console.log('Message received: ', { message, messageType })
-
 				if (messageType === 'iAmADie') {
 					const { 
 						batteryLevelPercent, 
 						batteryState,
-					} = message as IAmADie & LegacyIAmADie;
+					} = message as LegacyIAmADie;
 
 					await EventBus.emit(EventType.PixelBattery, {
 						id,
@@ -89,13 +83,6 @@ export class PixelManager {
 						event: message as RollEvent
 					});
 				}
-
-				// if ( messageType === "batteryLevel") {
-				// 	await EventBus.emit(EventType.PixelBattery, {
-				// 		id,
-				// 		event: message as BatteryEvent
-				// 	});
-				// }
 			});
 
 			peripheral.on('disconnect', async () => {

@@ -4,7 +4,7 @@ import z from "zod";
 import { EventBus } from "../common/eventBus";
 import { EventType, PixelRollEvent } from "../common/eventBus.types";
 import { PixelManager } from "../common/pixelManager";
-import { soundPlayer } from "../playSound";
+import { soundPlayer } from "../common/playSound";
 import { DisplayActionBase } from "./DisplayActionBase";
 
 enum DCType {
